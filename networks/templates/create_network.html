@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Crear Red OpenStack</title>
+</head>
+<body>
+    <h1>Crear Nueva Red en OpenStack</h1>
+    <form method="post">
+        {% csrf_token %}
+        <label for="opciones">Elige el tipo de red:</label>
+        <select id="opciones" name="opciones">
+            <option value="opcion5G">Red 5G</option>
+            <option value="opcionGen">Red Genérica</option>
+        </select>
+        <br><br>
+        <button type="submit">Crear Red</button>
+    </form>
+</body>
+</html>

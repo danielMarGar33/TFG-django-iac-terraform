@@ -1,0 +1,46 @@
+<!-- templates/create_network.html -->
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Lista de redes</title>
+</head>
+<body>
+    <h1>Hola {{ request.user.username }}, Esta es tu lista de redes</h1>
+
+    <p>¿Quieres eliminar tu usuario?</p>
+    <form action="{% url 'delete_user' %}" method="post">
+        {% csrf_token %}
+        <button type="submit">Eliminar usuario</button>
+    </form>
+
+    <p>¿Quieres crear una red?</p>
+    <form action="{% url 'create_network' %}" method="post">
+        {% csrf_token %}
+        <button type="submit">Crear red</button>
+    </form>
+
+    {% if creada_red_5G %}
+        <p>✅ Red 5G creada correctamente</p>
+        <form action="{% url 'delete_net_5G' %}" method="post">
+            {% csrf_token %}
+            <button type="submit">Eliminar red 5G</button>
+        </form>
+    {% else %}
+        <p>❌ No se ha creado tu red 5G</p>
+    {% endif %}
+
+    {% if creada_red_gen %}
+        <p>✅ Red genérica creada correctamente</p>
+        <form action="{% url 'delete_net_gen' %}" method="post">
+            {% csrf_token %}
+            <button type="submit">Eliminar red genérica</button>
+        </form>
+    {% else %}
+        <p>❌ No se ha creado tu red genérica</p>
+
+    {% endif %}
+
+
+
+</body>
+</html>
