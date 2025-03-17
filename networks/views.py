@@ -1,91 +1,111 @@
-# views.py (Vista para manejar la creación de redes)
 from django.shortcuts import render, redirect
 from django.conf import settings
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth import get_user
+from .models import UserNetwork, UserSubnet
 from .forms import NetworkForm
-from .terraform import append_section_5G, terraform_template
+from .terraform import append_section_5G, terraform_template, broker_template_5G, broker_template_no5G
 import subprocess, os, re, ipaddress
 
 # Red base y tamaño de subred
-BASE_CIDR = "10.0.1.0/24"
-NET_MASK = 27  # Cada usuario recibe una subred de 16 IPs
-SUBNET_MASK = 29  # Para subdivisión adicional si es necesario
-
-# Diccionarios globales para almacenar asignaciones
-user_net_map = {}      # Usuario → Red /27
-user_subnet_map = {}  # Usuario → Todas las subredes de usuario /29
-
-# Subredes 5G y genéricas del usuario
-subnet_5G = {}
-subnet_gen = {}
+BASE_CIDR = "10.0.0.0/8"
+NET_MASK = 16  # Cada usuario recibe una subred de 16 IPs
+SUBNET_MASK = 24  # Para subdivisión adicional si es necesario
 
 
-#Elimina todas las redes del usuario
-def delete_user_networks(username):
-    # Elimina la red del usuario solo si existe en el diccionario
-    if username in user_net_map:
-        del user_net_map[username]
+### FUNCIONES PARA GUARDAR DATOS EN BD ###
 
-    # Elimina las subredes del usuario solo si existen en el diccionario
-    if username in user_subnet_map:
-        del user_subnet_map[username]
+def asignar_red_usuario(usuario, red_cidr):
+    """ Asigna una red principal a un usuario en la BD """
+    UserNetwork.objects.update_or_create(user=usuario, defaults={"network_cidr": red_cidr})
 
-    # Elimina las subredes 5G del usuario solo si existe en el diccionario
-    if username in subnet_5G:
-        del subnet_5G[username]
+def obtener_red_usuario(usuario):
+    """ Obtiene la red principal de un usuario """
+    try:
+        return UserNetwork.objects.get(user=usuario).network_cidr
+    except UserNetwork.DoesNotExist:
+        return None
 
-    # Elimina las subredes genéricas del usuario solo si existe en el diccionario
-    if username in subnet_gen:
-        del subnet_gen[username]
+def eliminar_red_usuario(usuario):
+    """ Elimina la red principal del usuario """
+    UserNetwork.objects.filter(user=usuario).delete()
+
+def asignar_subred(usuario, nombre_subred, subred_cidr):
+    """ Asigna una subred específica a un usuario en la BD """
+    UserSubnet.objects.create(user=usuario, name=nombre_subred, subnet_cidr=subred_cidr)
+
+def obtener_subredes(usuario):
+    """ Devuelve todas las subredes de un usuario """
+    return list(UserSubnet.objects.filter(user=usuario).values_list("name", "subnet_cidr"))
+
+def obtener_subred_por_nombre(usuario, nombre_subred):
+    """Obtiene el valor de subnet_cidr de una subred específica de un usuario por nombre"""
+    subred = UserSubnet.objects.filter(user=usuario, name=nombre_subred).first()
+    
+    if subred:
+        return subred.subnet_cidr  
+    return "Subred no encontrada" 
+
+def eliminar_subred(usuario, nombre_subred):
+    """ Elimina una subred específica de la BD """
+    UserSubnet.objects.filter(user=usuario, name=nombre_subred).delete()
 
 
-#Genera una subred única que no haya sido asignada a partir de la red base, y las subredes que ya han sido asignadas.
-def get_unique_subnet(base_cidr, assigned_subnets, subnet_mask):
+### FUNCIONES DE LÓGICA ###
+
+def obtener_subred_unica(base_cidr, assigned_subnets, subnet_mask):
     network = ipaddress.IPv4Network(base_cidr, strict=False)
     subnets = list(network.subnets(new_prefix=subnet_mask))
-    
+
+    # Verificar si los elementos de assigned_subnets son las tuplas (subredes) o solo las subredes de usuario (creación de usuario)
+    if all(isinstance(item, tuple) and len(item) == 2 for item in assigned_subnets):
+        assigned_subnets_only = {subnet for _, subnet in assigned_subnets}
+    else:
+        assigned_subnets_only = set(assigned_subnets)
+
     for subnet in subnets:
-        if str(subnet) not in assigned_subnets:
-            assigned_subnets.add(str(subnet))
+        if str(subnet) not in assigned_subnets_only:
             return str(subnet)
-    
+
     raise ValueError("No quedan subredes disponibles.")
 
 def get_gateway(subnet_cidr):
-
     """ Devuelve la dirección IP del gateway de una subred """
     network = ipaddress.ip_network(subnet_cidr, strict=False)
     return str(network.network_address + 1)  # Primera IP válida como gateway
 
+
+### VISTAS ###
+
+@login_required
 def create_initial_config(request):
+    usuario = get_user(request)
+    print(f"Usuario en create_initial_config: {usuario} ({type(usuario)})")
 
-    """Asigna una subred única a un usuario y la almacena en el mapeo."""
-    global user_net_map, user_subnet_map
+    if not UserNetwork.objects.filter(user=usuario).exists():
+        assigned_nets = list(UserNetwork.objects.values_list('network_cidr', flat=True))
+        print(f"Redes asignadas: {assigned_nets}")
+        red_unica = obtener_subred_unica(BASE_CIDR, assigned_nets, NET_MASK)
+        asignar_red_usuario(usuario, red_unica)
 
-    assigned_nets = set(user_net_map.values())
-    red_unica = get_unique_subnet(BASE_CIDR, assigned_nets, NET_MASK)
-    user_net_map[request.user.username] = red_unica
-    print (f"Esta es la red unica del usuario {red_unica}")
+        subred_control = obtener_subred_unica(red_unica, [], SUBNET_MASK)
+        asignar_subred(usuario, "subred_control", subred_control)
 
-    # Verifica si el usuario tiene una lista de subredes en el diccionario
-    if request.user.username not in user_subnet_map:
-       user_subnet_map[request.user.username] = []  # Inicializa la lista si no existe
+        terraform_config = terraform_template(usuario.username, subred_control, get_gateway(subred_control))
 
-    assigned_subnets = set(user_subnet_map[request.user.username])
-    subred_unica = get_unique_subnet(user_net_map[request.user.username], assigned_subnets, SUBNET_MASK)
-    user_subnet_map[request.user.username].append(subred_unica)  # Agregar subred al usuario
+        #Añadir el broker no5G
+        broker_no5G= broker_template_no5G(usuario.username)
+        #TO-DO
 
-    terraform_config = terraform_template(request.user.username, subred_unica, get_gateway(subred_unica))
+        user_dir = os.path.join(settings.BASE_DIR, "terraform", usuario.username)
+        os.makedirs(user_dir, exist_ok=True)
 
-    # Crear directorio específico para el usuario
-    user_dir = os.path.join(settings.BASE_DIR, "terraform", request.user.username)
-    os.makedirs(user_dir, exist_ok=True)
-    
-    main_tf_path = os.path.join(user_dir, "main.tf")
-    with open(main_tf_path, "w") as f:
-        f.write(terraform_config)
+        main_tf_path = os.path.join(user_dir, "main.tf")
+        with open(main_tf_path, "w") as f:
+            f.write(terraform_config)
+            f.write("\n" + broker_no5G)
 
-
-
+@login_required
 def network_list(request):
     if not request.user.is_authenticated:
         return redirect('login')
@@ -94,7 +114,6 @@ def network_list(request):
     if isNew:
         create_initial_config(request)
 
-    # Obtener los valores desde la sesión y eliminarlos
     creada_red_5G = request.session.get('creada_red_5G', False)
     creada_red_gen = request.session.get('creada_red_gen', False)
 
@@ -105,15 +124,9 @@ def network_list(request):
 
     return render(request, 'network_list.html', context)
 
-
-
+@login_required
 def create_network(request):
-
-    """Asigna una subred única para la red 5G del usuario y la almacena en el mapeo."""
-    global user_subnetGEN_map, user_subnet5G_map
-
-    if not request.user.is_authenticated:
-        return redirect('login')
+    usuario = get_user(request)
 
     if request.method == 'POST':
         form = NetworkForm(request.POST)
@@ -122,26 +135,14 @@ def create_network(request):
             is5G = form.cleaned_data['opciones'] == 'opcion5G'
 
             if is5G:
- 
-                assigned_subnets = set(user_subnet_map[request.user.username])
-                subred_unica = get_unique_subnet(user_net_map[request.user.username], assigned_subnets, SUBNET_MASK)
-                user_subnet_map[request.user.username].append(subred_unica)  # Agregar subred al usuario
-                subnet_5G[request.user.username] = subred_unica
-    
+                asignar_subred(usuario, "subred_UE_AGF", obtener_subred_unica(obtener_red_usuario(usuario), obtener_subredes(usuario), SUBNET_MASK))
+                asignar_subred(usuario, "subred_AGF_core5G", obtener_subred_unica(obtener_red_usuario(usuario), obtener_subredes(usuario), SUBNET_MASK))
+                asignar_subred(usuario, "subred_core5G_internet", obtener_subred_unica(obtener_red_usuario(usuario), obtener_subredes(usuario), SUBNET_MASK))
 
-                apply_terraform_5G(request.user.username, subred_unica)
-                request.session['creada_red_5G'] = True  # Guardar el estado en la sesión
+                apply_terraform_5G(usuario, usuario.username)
+                request.session['creada_red_5G'] = True
                 return redirect('/network-list')
             else:
-
-                assigned_subnets = set(user_subnet_map[request.user.username])
-                subred_unica = get_unique_subnet(user_net_map[request.user.username], assigned_subnets, SUBNET_MASK)
-                user_subnet_map[request.user.username].append(subred_unica)  # Agregar subred al usuario
-                subnet_gen[request.user.username] = subred_unica
-
-
-                apply_terraform_gen(request.user.username, subred_unica)
-                request.session['creada_red_gen'] = True  # Guardar el estado en la sesión
                 return redirect('/network-list')
         else:
             return render(request, 'create_network.html', {'form': form})
@@ -149,77 +150,70 @@ def create_network(request):
     else:
         form = NetworkForm()
         return render(request, 'create_network.html', {'form': form})
-    
 
-
-
-# Función para crear la red 5G
-def apply_terraform_5G(username, subred_unica):
-    
+def apply_terraform_5G(usuario, username):
     user_dir = os.path.join("terraform", username)
     os.makedirs(user_dir, exist_ok=True)
+
+    main_tf_path = os.path.join(user_dir, "main.tf")
+
+    #Eliminar el broker no5G para añadir el broker 5G
+    broker_no5G= broker_template_no5G(usuario.username)
+    broker_5G= broker_template_5G(usuario.username)
+
+    append_section = append_section_5G(username, obtener_subred_por_nombre(usuario, "subred_UE_AGF"), obtener_subred_por_nombre(usuario, "subred_AGF_core5G"), obtener_subred_por_nombre(usuario, "subred_core5G_internet"))
     
-    main_tf_path = os.path.join(user_dir, "main.tf")
-
-    append_section = append_section_5G(username, subred_unica)
-
-    # Abrir el archivo en modo "append" para agregar contenido sin borrar lo anterior
-    with open(main_tf_path, "a") as f:
-        f.write("\n" + append_section)  # Se añade un salto de línea para separar bloques
-
-    # Ejecutar Terraform Apply (simulado)
-    subprocess.run("echo 'Ejecutando Apply de Terraform'", shell=True)
-
-
-
-# Función para crear la red genérica
-def apply_terraform_gen(username, subred_unica):
-
- return 0
-
-
-# Función para eliminar la red 5G
-def delete_net_5G(request):
-
-    global user_subnet5G_map
-
-    username = request.user.username
-    user_dir = os.path.join("terraform", username)
-    main_tf_path = os.path.join(user_dir, "main.tf")
-
-    # Verifica si el archivo existe antes de intentar modificarlo
-    if not os.path.exists(main_tf_path):
-        print(f"El archivo {main_tf_path} no existe.")
-        return
-
-    # Lee el contenido actual del archivo
     with open(main_tf_path, "r") as f:
         content = f.read()
 
-    # Usa la misma función que se usó para generar el contenido para eliminarlo
-    append_section = append_section_5G(username, subnet_5G[request.user.username])
-    user_subnet_map[request.user.username].remove(subnet_5G[request.user.username])
-    del subnet_5G[request.user.username]
+    old_broker = re.sub(re.escape(broker_no5G), "", content)
 
-    # Elimina el contenido generado por `append_section_5G` utilizando re.sub
-    new_content = re.sub(re.escape(append_section), "", content)
-
-    # Sobrescribe el archivo con el contenido limpio
     with open(main_tf_path, "w") as f:
-        f.write(new_content.strip())  # Limpiar líneas vacías extras
+        f.write(old_broker.strip())
+        f.write("\n" + broker_5G)
+        f.write("\n" + append_section)
 
-    print(f"Se eliminaron los recursos de {main_tf_path}")
-
-    # Ejecutar Terraform Apply (simulado)
     subprocess.run("echo 'Ejecutando Apply de Terraform'", shell=True)
- 
+
+@login_required
+def delete_net_5G(request):
+    usuario = get_user(request)
+    username = usuario.username
+    user_dir = os.path.join("terraform", username)
+    main_tf_path = os.path.join(user_dir, "main.tf")
+
+    if not os.path.exists(main_tf_path):
+        return redirect('/network-list')
+
+    with open(main_tf_path, "r") as f:
+        content = f.read()
+
+    append_section = append_section_5G(username, obtener_subred_por_nombre(usuario, "subred_UE_AGF"), obtener_subred_por_nombre(usuario, "subred_AGF_core5G"), obtener_subred_por_nombre(usuario, "subred_core5G_internet"))
+
+    #Eliminar el broker 5G para añadir el broker no5G
+    broker_no5G = broker_template_no5G(usuario.username)
+    broker_5G = broker_template_5G(usuario.username)
+    #TO-DO
+    
+    #Eliminar las subredes
+    eliminar_subred(usuario, "subred_UE_AGF")
+    eliminar_subred(usuario, "subred_AGF_core5G")
+    eliminar_subred(usuario, "subred_core5G_internet")
+
+    # Eliminar tanto el broker 5G como la sección adicional en una sola operación
+    old_content = re.sub(re.escape(append_section), "", content)
+    old_content = re.sub(re.escape(broker_5G), "", old_content).strip()
+
+    # Escribir el nuevo contenido en el archivo
+    with open(main_tf_path, "w") as f:
+        f.write(old_content + "\n" + broker_no5G)
+
+
+    subprocess.run("echo 'Ejecutando Apply de Terraform'", shell=True)
+
     request.session['creada_red_5G'] = False
     return redirect('/network-list')
 
-
-# Función para eliminar la red genérica
+@login_required
 def delete_net_gen(request):
- 
- print(request)
- request.session['creada_red_gen'] = False
- return redirect('/network-list')
+    return redirect('/network-list')

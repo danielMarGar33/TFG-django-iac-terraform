@@ -1,8 +1,9 @@
 from django.shortcuts import render, redirect
 from django.contrib.auth import login, logout
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
+from django.contrib.auth import get_user
 from django.conf import settings
-from networks.views import delete_user_networks
+from networks.views import eliminar_red_usuario
 import os, shutil
 
 # Vista de Registro
@@ -37,10 +38,11 @@ def custom_logout(request):
 
 # Vista de Eliminación de Usuarios
 def delete_user(request):
-    user = request.user  # Obtener usuario actual
+    
+    user = get_user(request)
     username = user.username  # Obtener el nombre de usuario antes de eliminarlo
 
-    delete_user_networks(username)
+    eliminar_red_usuario(user)
 
     # Eliminar usuario de la base de datos y cerrar sesión
     user.delete()
