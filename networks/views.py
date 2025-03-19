@@ -7,7 +7,7 @@ from .forms import NetworkForm
 from .terraform import append_section_5G, terraform_template, broker_template_5G, broker_template_no5G
 import subprocess, os, re, ipaddress
 
-# Red base y tamaño de subred
+# Red base y tamano de subred
 BASE_CIDR = "10.0.0.0/8"
 NET_MASK = 16  # Cada usuario recibe una subred de 16 IPs
 SUBNET_MASK = 24  # Para subdivisión adicional si es necesario
@@ -15,9 +15,9 @@ SUBNET_MASK = 24  # Para subdivisión adicional si es necesario
 
 ### FUNCIONES PARA GUARDAR DATOS EN BD ###
 
-def asignar_red_usuario(usuario, red_cidr):
+def asignar_red_usuario(usuario, red_cidr, ssh_password):
     """ Asigna una red principal a un usuario en la BD """
-    UserNetwork.objects.update_or_create(user=usuario, defaults={"network_cidr": red_cidr})
+    UserNetwork.objects.update_or_create(user=usuario, defaults={"network_cidr": red_cidr}, ssh_password=ssh_password)
 
 def obtener_red_usuario(usuario):
     """ Obtiene la red principal de un usuario """
@@ -89,17 +89,17 @@ def create_initial_config(request):
         assigned_nets = list(UserNetwork.objects.values_list('network_cidr', flat=True))
         print(f"Redes asignadas: {assigned_nets}")
         red_unica = obtener_subred_unica(BASE_CIDR, assigned_nets, NET_MASK)
-        asignar_red_usuario(usuario, red_unica)
+        print(request)
+        asignar_red_usuario(usuario, red_unica, request.session.get('ssh_password'))
 
         subred_control = obtener_subred_unica(red_unica, [], SUBNET_MASK)
         asignar_subred(usuario, "subred_control", subred_control)
 
         terraform_config = terraform_template(usuario.username, subred_control, get_gateway(subred_control))
 
-        #Añadir el broker no5G
-        broker_no5G= broker_template_no5G(usuario.username)
-        #TO-DO
-
+        #Anadir el broker no5G
+        broker_no5G= broker_template_no5G(usuario.username, UserNetwork.objects.get(user=usuario).ssh_password) 
+    
         user_dir = os.path.join(settings.BASE_DIR, "terraform", usuario.username)
         os.makedirs(user_dir, exist_ok=True)
 
@@ -108,7 +108,7 @@ def create_initial_config(request):
             f.write(terraform_config)
             f.write("\n" + broker_no5G)
 
-        subprocess.run(f"cd terraform/{usuario.username} && terraform init", shell=True)
+        subprocess.run(f"cd terraform/{usuario.username} && terraform init", shell=True, check=True)
         subprocess.run("cd ../..", shell=True)
         subprocess.run("ls -a", shell=True)
 
@@ -164,9 +164,9 @@ def apply_terraform_5G(usuario, username):
 
     main_tf_path = os.path.join(user_dir, "main.tf")
 
-    #Eliminar el broker no5G para añadir el broker 5G
-    broker_no5G= broker_template_no5G(usuario.username)
-    broker_5G= broker_template_5G(usuario.username)
+    #Eliminar el broker no5G para anadir el broker 5G
+    broker_no5G= broker_template_no5G(usuario.username, UserNetwork.objects.get(user=usuario).ssh_password)
+    broker_5G= broker_template_5G(usuario.username, UserNetwork.objects.get(user=usuario).ssh_password)
 
     append_section = append_section_5G(username, obtener_subred_por_nombre(usuario, "subred_UE_AGF"), obtener_subred_por_nombre(usuario, "subred_AGF_core5G"), obtener_subred_por_nombre(usuario, "subred_core5G_internet"))
     
@@ -180,7 +180,7 @@ def apply_terraform_5G(usuario, username):
         f.write("\n" + broker_5G)
         f.write("\n" + append_section)
     
-    subprocess.run(f"cd terraform/{usuario.username} && terraform apply -auto-approve", shell=True)
+    subprocess.run(f"cd terraform/{usuario.username} && terraform apply -auto-approve", shell=True, check=True)
     subprocess.run("cd ../..", shell=True)
 
 
@@ -199,9 +199,9 @@ def delete_net_5G(request):
 
     append_section = append_section_5G(username, obtener_subred_por_nombre(usuario, "subred_UE_AGF"), obtener_subred_por_nombre(usuario, "subred_AGF_core5G"), obtener_subred_por_nombre(usuario, "subred_core5G_internet"))
 
-    #Eliminar el broker 5G para añadir el broker no5G
-    broker_no5G = broker_template_no5G(usuario.username)
-    broker_5G = broker_template_5G(usuario.username)
+    #Eliminar el broker 5G para anadir el broker no5G
+    broker_no5G = broker_template_no5G(usuario.username, UserNetwork.objects.get(user=usuario).ssh_password)
+    broker_5G = broker_template_5G(usuario.username, UserNetwork.objects.get(user=usuario).ssh_password)
     
     #Eliminar las subredes
     eliminar_subred(usuario, "subred_UE_AGF")

@@ -21,6 +21,24 @@ provider "openstack" {{
   region      = "RegionOne"
 }}
 
+resource "openstack_networking_secgroup_rule_v2" "allow_icmp" {{
+  direction         = "ingress"
+  ethertype        = "IPv4"
+  protocol         = "icmp"
+  remote_ip_prefix = "0.0.0.0/0"
+  security_group_id = "5d30c798-f894-4886-8913-5ba29bfaf740"
+}}
+
+resource "openstack_networking_secgroup_rule_v2" "allow_ssh" {{
+  direction         = "ingress"
+  ethertype        = "IPv4"
+  protocol         = "tcp"
+  port_range_min   = 22
+  port_range_max   = 22
+  remote_ip_prefix = "0.0.0.0/0"
+  security_group_id = "5d30c798-f894-4886-8913-5ba29bfaf740"
+}}
+
 ######################
 # Configuracion de red del user 
 # Creacion de la red interna
@@ -77,15 +95,34 @@ resource "openstack_networking_port_v2" "broker_control_port" {{
 """
 
 
-def broker_template_no5G(username):
-  return f"""
+def broker_template_no5G(username, password):
+    return f"""
 # Crear instancia del broker con dos interfaces de red
 resource "openstack_compute_instance_v2" "broker_{username}" {{
   name      = "broker_1"
   image_id  = "db02fc5c-cacc-42be-8e5f-90f2db65cf7c"
   flavor_id = "101"
+  user_data = <<-EOF
+              #!/bin/bash
+              # Deshabilitar el acceso SSH para el usuario root
+              echo "PermitRootLogin no" >> /etc/ssh/sshd_config
+              
+              # Crear un nuevo usuario
+              useradd -m {username}
+              
+              # Establecer la contrasena para el nuevo usuario (puedes cambiarla)
+              echo "{username}:{password}" | chpasswd
+              usermod -aG sudo {username}
 
-  network {{
+              # Asegurarse de que el usuario pueda acceder a traves de SSH
+              echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
+              echo "AllowUsers {username}" >> /etc/ssh/sshd_config
+
+              # Reiniciar el servicio SSH para que los cambios tomen efecto
+              systemctl restart sshd
+              EOF
+
+network {{
     port = openstack_networking_port_v2.broker_control_port.id
   }}
 
@@ -93,19 +130,20 @@ resource "openstack_compute_instance_v2" "broker_{username}" {{
 """
 
 
-def broker_template_5G(username):
-  return f"""
-# Puerto para broker en la subred core5G-internet
+
+def broker_template_5G(username, password):
+    return f"""
+# Puerto para broker en la subred core5G_internet
 resource "openstack_networking_port_v2" "broker_core5G_port" {{
   name = "broker_core5G_port"
   network_id = openstack_networking_network_v2.{username}_network.id
   fixed_ip {{
-  subnet_id = openstack_networking_subnet_v2.{username}_core5G-internet_subnetwork.id
- }}
+    subnet_id = openstack_networking_subnet_v2.{username}_core5G_internet_subnetwork.id
+  }}
   timeouts {{
-   create = "10m"
-   delete = "10m"
- }}
+    create = "10m"
+    delete = "10m"
+  }}
 }}
 
 # Crear instancia del broker con tres interfaces de red
@@ -113,16 +151,37 @@ resource "openstack_compute_instance_v2" "broker_{username}" {{
   name      = "broker_1"
   image_id  = "db02fc5c-cacc-42be-8e5f-90f2db65cf7c"
   flavor_id = "101"
+  user_data = <<-EOF
+              #!/bin/bash
+              # Deshabilitar el acceso SSH para el usuario root
+              echo "PermitRootLogin no" >> /etc/ssh/sshd_config
+              
+              # Crear un nuevo usuario
+              useradd -m {username}
+              usermod -aG sudo {username}
 
-network {{
-  port = openstack_networking_port_v2.broker_control_port.id
+              
+              # Establecer la contrasena para el nuevo usuario (puedes cambiarla)
+              echo "{username}:{password}" | chpasswd
+              
+              # Asegurarse de que el usuario pueda acceder a traves de SSH
+              echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
+              echo "AllowUsers {username}" >> /etc/ssh/sshd_config
+
+              # Reiniciar el servicio SSH para que los cambios tomen efecto
+              systemctl restart sshd
+              EOF
+
+  network {{
+    port = openstack_networking_port_v2.broker_control_port.id
   }}
 
- network {{
-  port = openstack_networking_port_v2.broker_core5G_port.id
+  network {{
+    port = openstack_networking_port_v2.broker_core5G_port.id
   }}
 }}
 """
+
 
 
 def append_section_5G(username, subred_UE_AGF, subred_AGF_core5G, subred_core5G_internet): 
@@ -133,34 +192,34 @@ def append_section_5G(username, subred_UE_AGF, subred_AGF_core5G, subred_core5G_
 # subred_core5G_internet = {subred_core5G_internet}
 
 
-# Creacion de la subred 5G UE-AGF
-resource "openstack_networking_subnet_v2" "{username}_UE-AGF_subnetwork" {{
-  name       = "{username}_UE-AGF_subnetwork"
+# Creacion de la subred 5G UE_AGF
+resource "openstack_networking_subnet_v2" "{username}_UE_AGF_subnetwork" {{
+  name       = "{username}_UE_AGF_subnetwork"
   network_id = openstack_networking_network_v2.{username}_network.id
   cidr       = "{subred_UE_AGF}"
 }}
 
-# Creacion de la subred 5G AGF-core5G
-resource "openstack_networking_subnet_v2" "{username}_AGF-core5G_subnetwork" {{
-  name       = "{username}_AGF-core5G_subnetwork"
+# Creacion de la subred 5G AGF_core5G
+resource "openstack_networking_subnet_v2" "{username}_AGF_core5G_subnetwork" {{
+  name       = "{username}_AGF_core5G_subnetwork"
   network_id = openstack_networking_network_v2.{username}_network.id
   cidr       = "{subred_AGF_core5G}"
 }}
 
-# Creacion de la subred 5G core5G-internet
-resource "openstack_networking_subnet_v2" "{username}_core5G-internet_subnetwork" {{
-  name       = "{username}_core5G-internet_subnetwork"
+# Creacion de la subred 5G core5G_internet
+resource "openstack_networking_subnet_v2" "{username}_core5G_internet_subnetwork" {{
+  name       = "{username}_core5G_internet_subnetwork"
   network_id = openstack_networking_network_v2.{username}_network.id
   cidr       = "{subred_core5G_internet}"
 }}
 
 
-# Puerto para UE en la subred UE-AGF
-resource "openstack_networking_port_v2" "{username}_UE_5G_port" {{
+# Puerto para UE en la subred UE_AGF
+resource "openstack_networking_port_v2" "{username}_UE_AGF_port" {{
   name       = "{username}_UE_5G_port"
   network_id = openstack_networking_network_v2.{username}_network.id
   fixed_ip {{
-    subnet_id = openstack_networking_subnet_v2.{username}_UE-AGF_subnetwork.id
+    subnet_id = openstack_networking_subnet_v2.{username}_UE_AGF_subnetwork.id
   }}
   timeouts {{
     create = "10m"
@@ -188,7 +247,7 @@ resource "openstack_compute_instance_v2" "{username}_UE" {{
   flavor_id = "101"
 
   network {{
-    port = openstack_networking_port_v2.{username}_UE_5G_port.id
+    port = openstack_networking_port_v2.{username}_UE_AGF_port.id
   }}
 
   network {{
@@ -198,12 +257,12 @@ resource "openstack_compute_instance_v2" "{username}_UE" {{
 
 #------------
 
-# Puerto para AGF en la subred UE-AGF
-resource "openstack_networking_port_v2" "{username}_UE_AGF_5G_port" {{
+# Puerto para AGF en la subred UE_AGF
+resource "openstack_networking_port_v2" "{username}_AGF_UE_port" {{
   name       = "{username}_AGF_5G_port"
   network_id = openstack_networking_network_v2.{username}_network.id
   fixed_ip {{
-    subnet_id = openstack_networking_subnet_v2.{username}_UE-AGF_subnetwork.id
+    subnet_id = openstack_networking_subnet_v2.{username}_UE_AGF_subnetwork.id
   }}
   timeouts {{
     create = "10m"
@@ -211,12 +270,12 @@ resource "openstack_networking_port_v2" "{username}_UE_AGF_5G_port" {{
   }}
 }}
 
-# Puerto para AGF en la subred AGF-core5G
-resource "openstack_networking_port_v2" "{username}_AGF_core5G_5G_port" {{
+# Puerto para AGF en la subred AGF_core5G
+resource "openstack_networking_port_v2" "{username}_AGF_core5G_port" {{
   name       = "{username}_AGF_5G_port"
   network_id = openstack_networking_network_v2.{username}_network.id
   fixed_ip {{
-    subnet_id = openstack_networking_subnet_v2.{username}_AGF-core5G_subnetwork.id
+    subnet_id = openstack_networking_subnet_v2.{username}_AGF_core5G_subnetwork.id
   }}
   timeouts {{
     create = "10m"
@@ -244,11 +303,11 @@ resource "openstack_compute_instance_v2" "{username}_AGF" {{
   flavor_id = "101"
 
   network {{
-    port = openstack_networking_port_v2.{username}_UE_AGF_5G_port.id
+    port = openstack_networking_port_v2.{username}_AGF_UE_port.id
   }}
 
   network {{
-    port = openstack_networking_port_v2.{username}_AGF_core5G_5G_port.id
+    port = openstack_networking_port_v2.{username}_AGF_core5G_port.id
   }}
 
   network {{
@@ -258,12 +317,12 @@ resource "openstack_compute_instance_v2" "{username}_AGF" {{
 
 #------------
 
-# Puerto para core5G en la subred de servidores
-resource "openstack_networking_port_v2" "{username}_core5G_5G_port" {{
+# Puerto para core5G en la subred AGF_core5G
+resource "openstack_networking_port_v2" "{username}_core5G_AGF_port" {{
   name       = "{username}_core5G_5G_port"
   network_id = openstack_networking_network_v2.{username}_network.id
   fixed_ip {{
-    subnet_id = openstack_networking_subnet_v2.{username}_core5G-internet_subnetwork.id
+    subnet_id = openstack_networking_subnet_v2.{username}_AGF_core5G_subnetwork.id
   }}
   timeouts {{
     create = "10m"
@@ -284,6 +343,19 @@ resource "openstack_networking_port_v2" "{username}_core5G_control_port" {{
   }}
 }}
 
+# Puerto para core5G en la subred de internet
+resource "openstack_networking_port_v2" "{username}_core5G_internet_port" {{
+  name       = "{username}_core5G_internet_port"
+  network_id = openstack_networking_network_v2.{username}_network.id
+  fixed_ip {{
+    subnet_id = openstack_networking_subnet_v2.{username}_core5G_internet_subnetwork.id
+  }}
+  timeouts {{
+    create = "10m"
+    delete = "10m"
+  }}
+}}
+
 # Crear instancia del core5G
 resource "openstack_compute_instance_v2" "{username}_core5G" {{
   name      = "{username}_core5G"
@@ -291,10 +363,13 @@ resource "openstack_compute_instance_v2" "{username}_core5G" {{
   flavor_id = "101"
 
   network {{
-    port = openstack_networking_port_v2.{username}_core5G_5G_port.id
+    port = openstack_networking_port_v2.{username}_core5G_AGF_port.id
   }}
   network {{
     port = openstack_networking_port_v2.{username}_core5G_control_port.id
+  }}
+  network {{
+    port = openstack_networking_port_v2.{username}_core5G_internet_port.id
   }}
 }}
     """

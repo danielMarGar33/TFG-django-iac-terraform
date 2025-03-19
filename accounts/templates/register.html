@@ -4,6 +4,9 @@
 <form method="post">
     {% csrf_token %}
     {{ form.as_p }}
+    <div>
+        Ingrese una contrasena para su acceso por SSH: <input type="password" name="ssh_password" required />
+    </div>
     <button type="submit">Registrarse</button>
 </form>
 <a href="{% url 'login' %}">¿Ya tienes cuenta? Inicia sesión</a>

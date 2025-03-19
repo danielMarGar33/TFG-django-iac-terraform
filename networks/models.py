@@ -4,6 +4,7 @@ from django.contrib.auth.models import User
 class UserNetwork(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="network")
     network_cidr = models.CharField(max_length=18, unique=True)  # Ej: "10.0.0.0/27"
+    ssh_password = models.CharField(max_length=50, blank=True)  # Contrasena para SSH
 
     def __str__(self):
         return f"{self.user.username} - {self.network_cidr}"
