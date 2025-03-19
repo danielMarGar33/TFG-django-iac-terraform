@@ -30,6 +30,9 @@ def eliminar_red_usuario(usuario):
     """ Elimina la red principal del usuario """
     UserNetwork.objects.filter(user=usuario).delete()
 
+    subprocess.run(f"cd terraform/{usuario.username} && terraform destroy -auto-approve", shell=True)
+    subprocess.run("cd ../..", shell=True)
+
 def asignar_subred(usuario, nombre_subred, subred_cidr):
     """ Asigna una subred específica a un usuario en la BD """
     UserSubnet.objects.create(user=usuario, name=nombre_subred, subnet_cidr=subred_cidr)
@@ -105,6 +108,10 @@ def create_initial_config(request):
             f.write(terraform_config)
             f.write("\n" + broker_no5G)
 
+        subprocess.run(f"cd terraform/{usuario.username} && terraform init", shell=True)
+        subprocess.run("cd ../..", shell=True)
+        subprocess.run("ls -a", shell=True)
+
 @login_required
 def network_list(request):
     if not request.user.is_authenticated:
@@ -172,8 +179,10 @@ def apply_terraform_5G(usuario, username):
         f.write(old_broker.strip())
         f.write("\n" + broker_5G)
         f.write("\n" + append_section)
+    
+    subprocess.run(f"cd terraform/{usuario.username} && terraform apply -auto-approve", shell=True)
+    subprocess.run("cd ../..", shell=True)
 
-    subprocess.run("echo 'Ejecutando Apply de Terraform'", shell=True)
 
 @login_required
 def delete_net_5G(request):
@@ -193,7 +202,6 @@ def delete_net_5G(request):
     #Eliminar el broker 5G para añadir el broker no5G
     broker_no5G = broker_template_no5G(usuario.username)
     broker_5G = broker_template_5G(usuario.username)
-    #TO-DO
     
     #Eliminar las subredes
     eliminar_subred(usuario, "subred_UE_AGF")
@@ -207,9 +215,9 @@ def delete_net_5G(request):
     # Escribir el nuevo contenido en el archivo
     with open(main_tf_path, "w") as f:
         f.write(old_content + "\n" + broker_no5G)
-
-
-    subprocess.run("echo 'Ejecutando Apply de Terraform'", shell=True)
+    
+    subprocess.run(f"cd terraform/{usuario.username} && terraform apply -auto-approve", shell=True)
+    subprocess.run("cd ../..", shell=True)
 
     request.session['creada_red_5G'] = False
     return redirect('/network-list')

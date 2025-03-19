@@ -21,44 +21,6 @@ provider "openstack" {{
   region      = "RegionOne"
 }}
 
-# Configuracion de flavours
-resource "openstack_compute_flavor_v2" "b5g_terraform_small" {{
-  name      = "b5g_terraform_small"
-  ram       = 2048
-  vcpus     = 1
-  disk      = 0
-  flavor_id = "101"
-  is_public = true
-}}
-
-resource "openstack_compute_flavor_v2" "b5g_terraform_medium" {{
-  name      = "b5g_terraform_medium"
-  ram       = 4096
-  vcpus     = 2
-  disk      = 0
-  flavor_id = "102"
-  is_public = true
-}}
-
-resource "openstack_compute_flavor_v2" "b5g_terraform_large" {{
-  name      = "b5g_terraform_large"
-  ram       = 8192
-  vcpus     = 4
-  disk      = 0
-  flavor_id = "103"
-  is_public = true
-}}
-
-resource "openstack_networking_secgroup_rule_v2" "ssh_rule" {{
-  direction         = "ingress"
-  ethertype         = "IPv4"
-  protocol          = "tcp"
-  port_range_min    = 22
-  port_range_max    = 22
-  remote_ip_prefix  = "0.0.0.0/0"
-  security_group_id = "5d30c798-f894-4886-8913-5ba29bfaf740" #Id del grupo de seguridad default
-}}
-
 ######################
 # Configuracion de red del user 
 # Creacion de la red interna
@@ -112,20 +74,6 @@ resource "openstack_networking_port_v2" "broker_control_port" {{
     delete = "10m"
   }}
 }}
-
-
-# Puerto para broker en la subred de control
-resource "openstack_networking_port_v2" "broker_control_port" {{
-  name       = "broker_control_port"
-  network_id = openstack_networking_network_v2.{username}_network.id
-  fixed_ip {{
-    subnet_id = openstack_networking_subnet_v2.{username}_control_subnetwork.id
-  }}
-  timeouts {{
-    create = "10m"
-    delete = "10m"
-  }}
-}}
 """
 
 
@@ -135,7 +83,7 @@ def broker_template_no5G(username):
 resource "openstack_compute_instance_v2" "broker_{username}" {{
   name      = "broker_1"
   image_id  = "db02fc5c-cacc-42be-8e5f-90f2db65cf7c"
-  flavor_id = openstack_compute_flavor_v2.b5g_terraform_small.id
+  flavor_id = "101"
 
   network {{
     port = openstack_networking_port_v2.broker_control_port.id
@@ -164,7 +112,7 @@ resource "openstack_networking_port_v2" "broker_core5G_port" {{
 resource "openstack_compute_instance_v2" "broker_{username}" {{
   name      = "broker_1"
   image_id  = "db02fc5c-cacc-42be-8e5f-90f2db65cf7c"
-  flavor_id = openstack_compute_flavor_v2.b5g_terraform_small.id
+  flavor_id = "101"
 
 network {{
   port = openstack_networking_port_v2.broker_control_port.id
@@ -187,21 +135,21 @@ def append_section_5G(username, subred_UE_AGF, subred_AGF_core5G, subred_core5G_
 
 # Creacion de la subred 5G UE-AGF
 resource "openstack_networking_subnet_v2" "{username}_UE-AGF_subnetwork" {{
-  name       = "{username}_5G_subnetwork"
+  name       = "{username}_UE-AGF_subnetwork"
   network_id = openstack_networking_network_v2.{username}_network.id
   cidr       = "{subred_UE_AGF}"
 }}
 
 # Creacion de la subred 5G AGF-core5G
 resource "openstack_networking_subnet_v2" "{username}_AGF-core5G_subnetwork" {{
-  name       = "{username}_5G_subnetwork"
+  name       = "{username}_AGF-core5G_subnetwork"
   network_id = openstack_networking_network_v2.{username}_network.id
   cidr       = "{subred_AGF_core5G}"
 }}
 
 # Creacion de la subred 5G core5G-internet
 resource "openstack_networking_subnet_v2" "{username}_core5G-internet_subnetwork" {{
-  name       = "{username}_5G_subnetwork"
+  name       = "{username}_core5G-internet_subnetwork"
   network_id = openstack_networking_network_v2.{username}_network.id
   cidr       = "{subred_core5G_internet}"
 }}
@@ -212,7 +160,7 @@ resource "openstack_networking_port_v2" "{username}_UE_5G_port" {{
   name       = "{username}_UE_5G_port"
   network_id = openstack_networking_network_v2.{username}_network.id
   fixed_ip {{
-    subnet_id = openstack_networking_subnet_v2.{username}_5G_subnetwork.id
+    subnet_id = openstack_networking_subnet_v2.{username}_UE-AGF_subnetwork.id
   }}
   timeouts {{
     create = "10m"
@@ -237,7 +185,7 @@ resource "openstack_networking_port_v2" "{username}_UE_control_port" {{
 resource "openstack_compute_instance_v2" "{username}_UE" {{
   name      = "{username}_UE"
   image_id  = "db02fc5c-cacc-42be-8e5f-90f2db65cf7c"
-  flavor_id = openstack_compute_flavor_v2.b5g_terraform_small.id
+  flavor_id = "101"
 
   network {{
     port = openstack_networking_port_v2.{username}_UE_5G_port.id
@@ -293,7 +241,7 @@ resource "openstack_networking_port_v2" "{username}_AGF_control_port" {{
 resource "openstack_compute_instance_v2" "{username}_AGF" {{
   name      = "{username}_AGF"
   image_id  = "db02fc5c-cacc-42be-8e5f-90f2db65cf7c"
-  flavor_id = openstack_compute_flavor_v2.b5g_terraform_small.id
+  flavor_id = "101"
 
   network {{
     port = openstack_networking_port_v2.{username}_UE_AGF_5G_port.id
@@ -337,15 +285,14 @@ resource "openstack_networking_port_v2" "{username}_core5G_control_port" {{
 }}
 
 # Crear instancia del core5G
-resource "openstack_compute_instance_v2" "{username}_AGF" {{
+resource "openstack_compute_instance_v2" "{username}_core5G" {{
   name      = "{username}_core5G"
   image_id  = "db02fc5c-cacc-42be-8e5f-90f2db65cf7c"
-  flavor_id = openstack_compute_flavor_v2.b5g_terraform_small.id
+  flavor_id = "101"
 
   network {{
     port = openstack_networking_port_v2.{username}_core5G_5G_port.id
   }}
-
   network {{
     port = openstack_networking_port_v2.{username}_core5G_control_port.id
   }}
