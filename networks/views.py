@@ -2,7 +2,7 @@ from django.shortcuts import render, redirect
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import get_user
-from .models import UserNetwork, UserSubnet
+from .models import UserNetwork, UserSubnet, SSH_password
 from .forms import NetworkForm
 from .terraform import append_section_5G, terraform_template
 import subprocess, os, re, ipaddress
@@ -15,16 +15,24 @@ SUBNET_MASK = 24  # Para subdivisión adicional si es necesario
 
 ### FUNCIONES PARA GUARDAR DATOS EN BD ###
 
-def asignar_red_usuario(usuario, red_cidr, ssh_password):
+def asignar_red_usuario(usuario, red_cidr):
     """ Asigna una red principal a un usuario en la BD """
-    UserNetwork.objects.update_or_create(user=usuario, defaults={"network_cidr": red_cidr}, ssh_password=ssh_password)
+    UserNetwork.objects.update_or_create(user=usuario, name="user_network", defaults={"network_cidr": red_cidr})
 
-def obtener_red_usuario(usuario):
+def asignar_red_control(usuario, red_cidr):
+    """ Asigna una red de control a un usuario en la BD """
+    UserNetwork.objects.update_or_create(user=usuario, name="control_network", defaults={"network_cidr": red_cidr})
+
+def obtener_red(usuario, nombre):
     """ Obtiene la red principal de un usuario """
     try:
-        return UserNetwork.objects.get(user=usuario).network_cidr
+        return UserNetwork.objects.get(user=usuario, name=nombre).network_cidr
     except UserNetwork.DoesNotExist:
         return None
+    
+def asignar_contraseña_ssh(usuario, contraseña):
+    """ Asigna una contraseña de SSH a un usuario en la BD """
+    SSH_password.objects.update_or_create(user=usuario, defaults={"ssh_password": contraseña})
 
 def eliminar_red_usuario(usuario):
     """ Elimina la red principal del usuario """
@@ -87,15 +95,20 @@ def create_initial_config(request):
 
     if not UserNetwork.objects.filter(user=usuario).exists():
         assigned_nets = list(UserNetwork.objects.values_list('network_cidr', flat=True))
-        print(f"Redes asignadas: {assigned_nets}")
+
         red_unica = obtener_subred_unica(BASE_CIDR, assigned_nets, NET_MASK)
-        print(request)
-        asignar_red_usuario(usuario, red_unica, request.session.get('ssh_password'))
+        asignar_red_usuario(usuario, red_unica)
 
-        subred_control = obtener_subred_unica(red_unica, [], SUBNET_MASK)
-        asignar_subred(usuario, "subred_control", subred_control)
+        assigned_nets = list(UserNetwork.objects.values_list('network_cidr', flat=True))
 
-        terraform_config = terraform_template(usuario.username, UserNetwork.objects.get(user=usuario).ssh_password, subred_control, get_gateway(subred_control))
+        red_unica = obtener_subred_unica(BASE_CIDR, assigned_nets, NET_MASK)
+        asignar_red_control(usuario, red_unica)
+        print(f"Redes asignadas: {assigned_nets}")
+
+        asignar_contraseña_ssh(usuario, request.session.get('ssh_password'))
+        
+        red_control = obtener_red(usuario, "control_network")
+        terraform_config = terraform_template(usuario.username, SSH_password.objects.get(user=usuario).ssh_password, red_control, get_gateway(red_control))
     
         user_dir = os.path.join(settings.BASE_DIR, "terraform", usuario.username)
         os.makedirs(user_dir, exist_ok=True)
@@ -138,9 +151,9 @@ def create_network(request):
             is5G = form.cleaned_data['opciones'] == 'opcion5G'
 
             if is5G:
-                asignar_subred(usuario, "subred_UE_AGF", obtener_subred_unica(obtener_red_usuario(usuario), obtener_subredes(usuario), SUBNET_MASK))
-                asignar_subred(usuario, "subred_AGF_core5G", obtener_subred_unica(obtener_red_usuario(usuario), obtener_subredes(usuario), SUBNET_MASK))
-                asignar_subred(usuario, "subred_core5G_internet", obtener_subred_unica(obtener_red_usuario(usuario), obtener_subredes(usuario), SUBNET_MASK))
+                asignar_subred(usuario, "subred_UE_AGF", obtener_subred_unica(obtener_red(usuario, "user_network"), obtener_subredes(usuario), SUBNET_MASK))
+                asignar_subred(usuario, "subred_AGF_core5G", obtener_subred_unica(obtener_red(usuario, "user_network"), obtener_subredes(usuario), SUBNET_MASK))
+                asignar_subred(usuario, "subred_core5G_server", obtener_subred_unica(obtener_red(usuario, "user_network"), obtener_subredes(usuario), SUBNET_MASK))
 
                 apply_terraform_5G(usuario, usuario.username)
                 request.session['creada_red_5G'] = True
@@ -161,12 +174,9 @@ def apply_terraform_5G(usuario, username):
     main_tf_path = os.path.join(user_dir, "main.tf")
 
     append_section = append_section_5G(username, 
-                                       UserNetwork.objects.get(user=usuario).ssh_password, 
-                                       obtener_subred_por_nombre(usuario, "subred_control"),
                                        obtener_subred_por_nombre(usuario, "subred_UE_AGF"), 
                                        obtener_subred_por_nombre(usuario, "subred_AGF_core5G"), 
-                                       obtener_subred_por_nombre(usuario, "subred_core5G_internet"), 
-                                       get_gateway(obtener_subred_por_nombre(usuario, "subred_core5G_internet")))
+                                       obtener_subred_por_nombre(usuario, "subred_core5G_server"))
     with open(main_tf_path, "a") as f:
         f.write("\n" + append_section)
     
@@ -188,17 +198,14 @@ def delete_net_5G(request):
         content = f.read()
 
     append_section = append_section_5G(username, 
-                                       UserNetwork.objects.get(user=usuario).ssh_password, 
-                                       obtener_subred_por_nombre(usuario, "subred_control"),
                                        obtener_subred_por_nombre(usuario, "subred_UE_AGF"), 
                                        obtener_subred_por_nombre(usuario, "subred_AGF_core5G"), 
-                                       obtener_subred_por_nombre(usuario, "subred_core5G_internet"), 
-                                       get_gateway(obtener_subred_por_nombre(usuario, "subred_core5G_internet")))
+                                       obtener_subred_por_nombre(usuario, "subred_core5G_server"))
     
     #Eliminar las subredes
     eliminar_subred(usuario, "subred_UE_AGF")
     eliminar_subred(usuario, "subred_AGF_core5G")
-    eliminar_subred(usuario, "subred_core5G_internet")
+    eliminar_subred(usuario, "subred_core5G_server")
 
     # Eliminar todo en una sola operación
     old_content = re.sub(re.escape(append_section), "", content).strip()

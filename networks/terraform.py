@@ -1,4 +1,4 @@
-def terraform_template(username, password, subred_control, gateway):
+def terraform_template(username, password, red_control, gateway):
  return f"""
 terraform {{
   required_version = ">= 0.14.0"
@@ -27,11 +27,19 @@ resource "openstack_networking_network_v2" "{username}_network" {{
   admin_state_up = true
 }}
 
+# Configuracion de red de control
+# Creacion de la red interna
+resource "openstack_networking_network_v2" "{username}_control_network" {{
+  name           = "{username}_control_network"
+  admin_state_up = true
+}}
+
+
 # Creacion de la subred de control
 resource "openstack_networking_subnet_v2" "{username}_control_subnetwork" {{
   name       = "{username}_control_subnetwork"
-  network_id = openstack_networking_network_v2.{username}_network.id
-  cidr       = "{subred_control}"
+  network_id = openstack_networking_network_v2.{username}_control_network.id
+  cidr       = "{red_control}"
   gateway_ip = "{gateway}"
 }}
 
@@ -63,7 +71,7 @@ resource "openstack_compute_floatingip_associate_v2" "server_floating_ip_assoc" 
 # Puerto para broker en la subred de control
 resource "openstack_networking_port_v2" "broker_control_port" {{
   name       = "broker_control_port"
-  network_id = openstack_networking_network_v2.{username}_network.id
+  network_id = openstack_networking_network_v2.{username}_control_network.id
   fixed_ip {{
     subnet_id = openstack_networking_subnet_v2.{username}_control_subnetwork.id
   }}
@@ -106,12 +114,12 @@ network {{
 """
 
 
-def append_section_5G(username, password, subred_control, subred_UE_AGF, subred_AGF_core5G, subred_core5G_internet, gateway): 
+def append_section_5G(username, subred_UE_AGF, subred_AGF_core5G, subred_core5G_server): 
  return f"""
 
 # subred_UE_AGF = {subred_UE_AGF}
 # subred_AGF_core5G = {subred_AGF_core5G}
-# subred_core5G_internet = {subred_core5G_internet}
+# subred_core5G_server = {subred_core5G_server}
 
 
 # Creacion de la subred 5G UE_AGF
@@ -129,12 +137,11 @@ resource "openstack_networking_subnet_v2" "{username}_AGF_core5G_subnetwork" {{
   cidr       = "{subred_AGF_core5G}"
 }}
 
-# Creacion de la subred 5G core5G_internet
-resource "openstack_networking_subnet_v2" "{username}_core5G_internet_subnetwork" {{
-  name       = "{username}_core5G_internet_subnetwork"
+# Creacion de la subred 5G core5G_server
+resource "openstack_networking_subnet_v2" "{username}_core5G_server_subnetwork" {{
+  name       = "{username}_core5G_server_subnetwork"
   network_id = openstack_networking_network_v2.{username}_network.id
-  cidr       = "{subred_core5G_internet}"
-  gateway_ip = "{gateway}"
+  cidr       = "{subred_core5G_server}"
 }}
 
 
@@ -154,7 +161,7 @@ resource "openstack_networking_port_v2" "{username}_UE_AGF_port" {{
 # Puerto para UE en la subred de control
 resource "openstack_networking_port_v2" "{username}_UE_control_port" {{
   name       = "{username}_UE_control_port"
-  network_id = openstack_networking_network_v2.{username}_network.id
+  network_id = openstack_networking_network_v2.{username}_control_network.id
   fixed_ip {{
     subnet_id = openstack_networking_subnet_v2.{username}_control_subnetwork.id
   }}
@@ -169,17 +176,6 @@ resource "openstack_compute_instance_v2" "{username}_UE" {{
   name      = "{username}_UE"
   image_id  = "db02fc5c-cacc-42be-8e5f-90f2db65cf7c"
   flavor_id = "101"
-  user_data = <<-EOF
-              # Obtener las IP fijas de los puertos de Terraform
-              AGF_IP=${{openstack_networking_port_v2.{username}_UE_AGF_port.fixed_ip[0].ip_address}}
-              CONTROL_IP=${{openstack_networking_port_v2.{username}_UE_control_port.fixed_ip[0].ip_address}}
-
-              # Anadir las rutas con metricas
-              ip route add {subred_UE_AGF} via $AGF_IP dev ens3 metric 200
-              ip route add {subred_control} via $CONTROL_IP dev ens4 metric 300
-              
-              sudo systemctl restart systemd-networkd
-              EOF
   network {{
     port = openstack_networking_port_v2.{username}_UE_AGF_port.id
   }}
@@ -224,7 +220,7 @@ resource "openstack_networking_port_v2" "{username}_AGF_core5G_port" {{
 # Puerto para AGF en la subred de control
 resource "openstack_networking_port_v2" "{username}_AGF_control_port" {{
   name       = "{username}_AGF_control_port"
-  network_id = openstack_networking_network_v2.{username}_network.id
+  network_id = openstack_networking_network_v2.{username}_control_network.id
   fixed_ip {{
     subnet_id = openstack_networking_subnet_v2.{username}_control_subnetwork.id
   }}
@@ -239,19 +235,6 @@ resource "openstack_compute_instance_v2" "{username}_AGF" {{
   name      = "{username}_AGF"
   image_id  = "db02fc5c-cacc-42be-8e5f-90f2db65cf7c"
   flavor_id = "101"
-  user_data = <<-EOF            
-              # Obtener las IP fijas de los puertos de Terraform
-              UE_IP=${{openstack_networking_port_v2.{username}_UE_AGF_port.fixed_ip[0].ip_address}}
-              CONTROL_IP=${{openstack_networking_port_v2.{username}_AGF_control_port.fixed_ip[0].ip_address}}
-              CORE_IP=${{openstack_networking_port_v2.{username}_AGF_core5G_port.fixed_ip[0].ip_address}}
-
-              # Anadir las rutas con metricas
-              ip route add {subred_AGF_core5G} via $CORE_IP dev ens3 metric 50
-              ip route add {subred_UE_AGF} via $UE_IP dev ens4 metric 50
-              ip route add {subred_control} via $CONTROL_IP dev ens5 metric 50
-              
-              sudo systemctl restart systemd-networkd
-              EOF
   network {{
     port = openstack_networking_port_v2.{username}_AGF_UE_port.id
   }}
@@ -283,7 +266,7 @@ resource "openstack_networking_port_v2" "{username}_core5G_AGF_port" {{
 # Puerto para core5G en la subred de control
 resource "openstack_networking_port_v2" "{username}_core5G_control_port" {{
   name       = "{username}_core5G_control_port"
-  network_id = openstack_networking_network_v2.{username}_network.id
+  network_id = openstack_networking_network_v2.{username}_control_network.id
   fixed_ip {{
     subnet_id = openstack_networking_subnet_v2.{username}_control_subnetwork.id
   }}
@@ -294,11 +277,11 @@ resource "openstack_networking_port_v2" "{username}_core5G_control_port" {{
 }}
 
 # Puerto para core5G en la subred de internet
-resource "openstack_networking_port_v2" "{username}_core5G_internet_port" {{
-  name       = "{username}_core5G_internet_port"
+resource "openstack_networking_port_v2" "{username}_core5G_server_port" {{
+  name       = "{username}_core5G_server_port"
   network_id = openstack_networking_network_v2.{username}_network.id
   fixed_ip {{
-    subnet_id = openstack_networking_subnet_v2.{username}_core5G_internet_subnetwork.id
+    subnet_id = openstack_networking_subnet_v2.{username}_core5G_server_subnetwork.id
   }}
   timeouts {{
     create = "10m"
@@ -311,21 +294,8 @@ resource "openstack_compute_instance_v2" "{username}_core5G" {{
   name      = "{username}_core5G"
   image_id  = "db02fc5c-cacc-42be-8e5f-90f2db65cf7c"
   flavor_id = "101"
-  user_data = <<-EOF
-              # Obtener las IP fijas de los puertos de Terraform
-              AGF_IP=${{openstack_networking_port_v2.{username}_core5G_AGF_port.fixed_ip[0].ip_address}}
-              CONTROL_IP=${{openstack_networking_port_v2.{username}_core5G_control_port.fixed_ip[0].ip_address}}
-              INTERNET_IP=${{openstack_networking_port_v2.{username}_core5G_internet_port.fixed_ip[0].ip_address}}
-
-              # Anadir las rutas con metricas
-              ip route add {subred_core5G_internet} via $INTERNET_IP dev ens3 metric 50
-              ip route add {subred_AGF_core5G} via $AGF_IP dev ens4 metric 50
-              ip route add {subred_control} via $CONTROL_IP dev ens5 metric 50
-              
-              sudo systemctl restart systemd-networkd
-              EOF
   network {{
-    port = openstack_networking_port_v2.{username}_core5G_internet_port.id
+    port = openstack_networking_port_v2.{username}_core5G_server_port.id
   }}
   network {{
     port = openstack_networking_port_v2.{username}_core5G_AGF_port.id
@@ -335,27 +305,42 @@ resource "openstack_compute_instance_v2" "{username}_core5G" {{
   }}
 }}
 
-# # Configuracion del router para conectarse a internet
-# resource "openstack_networking_router_v2" "mgmt_router_core5G_{username}" {{
-#   name                = "mgmt_router_core5G_{username}"
-#   admin_state_up      = true
-#   external_network_id = "30157725-23a0-4b3e-bd6a-ebfc46c39cac" # ID de la red externa
-# }}
+# Puerto para el server en la subred de control
+resource "openstack_networking_port_v2" "{username}_server_control_port" {{
+  name       = "{username}_server_control_port"
+  network_id = openstack_networking_network_v2.{username}_control_network.id
+  fixed_ip {{
+    subnet_id = openstack_networking_subnet_v2.{username}_control_subnetwork.id
+  }}
+  timeouts {{
+    create = "10m"
+    delete = "10m"
+  }}
+}}
 
-# # Conexion del router a la red de internet 
-# resource "openstack_networking_router_interface_v2" "router_internal_interface_core" {{
-#   router_id = openstack_networking_router_v2.mgmt_router_core5G_{username}.id
-#   subnet_id = openstack_networking_subnet_v2.{username}_core5G_internet_subnetwork.id
-# }}
+# Puerto para el server en la subred de internet
+resource "openstack_networking_port_v2" "{username}_server_core5G_port" {{
+  name       = "{username}_server_core5G_port"
+  network_id = openstack_networking_network_v2.{username}_network.id
+  fixed_ip {{
+    subnet_id = openstack_networking_subnet_v2.{username}_core5G_server_subnetwork.id
+  }}
+  timeouts {{
+    create = "10m"
+    delete = "10m"
+  }}
+}}
 
-# # Crear IP flotante para el core5G
-# resource "openstack_networking_floatingip_v2" "floating_ip_core" {{
-#   pool = "extnet" # Asigna una IP en el rango de direcciones que tenemos en la red externa
-# }}
-
-# # Asociar la IP flotante a la instancia
-# resource "openstack_compute_floatingip_associate_v2" "server_floating_ip_assoc_core" {{
-#   floating_ip = openstack_networking_floatingip_v2.floating_ip_core.address
-#   instance_id = openstack_compute_instance_v2.core5G_{username}.id
-#}}
+# Crear instancia del server 5G
+resource "openstack_compute_instance_v2" "{username}_server" {{
+  name      = "{username}_server"
+  image_id  = "db02fc5c-cacc-42be-8e5f-90f2db65cf7c"
+  flavor_id = "101"
+  network {{
+    port = openstack_networking_port_v2.{username}_server_core5G_port.id
+  }}
+  network {{
+    port = openstack_networking_port_v2.{username}_server_control_port.id
+  }}
+}}
 """
