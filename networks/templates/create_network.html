@@ -9,8 +9,15 @@
         {% csrf_token %}
         <label for="opciones">Elige el tipo de red:</label>
         <select id="opciones" name="opciones">
-            <option value="opcion5G">Red 5G</option>
-            <option value="opcionGen">Red Genérica</option>
+            {% if not creada_red_5G_open %}
+                <option value="opcion5G_open">Red open5G</option>
+            {% endif %}
+            {% if not creada_red_5G_free %}
+                <option value="opcion5G_free">Red free5G</option>
+            {% endif %}
+            {% if not creada_red_gen %}
+                <option value="opcionGen">Red Genérica</option>
+            {% endif %}
         </select>
         <br><br>
         <button type="submit">Crear Red</button>

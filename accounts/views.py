@@ -1,10 +1,10 @@
 from django.shortcuts import render, redirect
-from django.contrib.auth import login, logout
+from django.contrib.auth import login, logout, get_user
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
-from django.contrib.auth import get_user
 from django.conf import settings
-from networks.views import eliminar_red_usuario
+from networks.terraform import terraform_destroy  # Asegúrate de que esta función esté definida en terraform.py
 import os, shutil
+
 
 # Vista de Registro
 def register(request):
@@ -49,17 +49,26 @@ def delete_user(request):
     user = get_user(request)
     username = user.username  # Obtener el nombre de usuario antes de eliminarlo
 
-    eliminar_red_usuario(user)
-
     # Eliminar usuario de la base de datos y cerrar sesión
     user.delete()
     logout(request)
+    terraform_destroy(username)
 
     # Ruta del directorio del usuario
     user_dir = os.path.join(settings.BASE_DIR, "terraform", username)
+
+    # Ruta del directorio de backup del usuario 
+    backup_dir = os.path.join(settings.BASE_DIR, "terraform", f"{username}_backup")
 
     # Eliminar el directorio de forma segura si existe
     if os.path.exists(user_dir):
         shutil.rmtree(user_dir)  # Borra la carpeta con todo su contenido
 
+    # Eliminar el directorio de backup de forma segura si existe
+    if os.path.exists(backup_dir):
+        shutil.rmtree(backup_dir)  # Borra la carpeta con todo su contenido
+
     return redirect('login')  # Redirigir al login después de eliminar
+
+def error_page(request, exception=None):
+    return render(request, 'error.html')

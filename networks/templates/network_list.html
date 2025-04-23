@@ -1,10 +1,12 @@
-<!-- templates/create_network.html -->
 <!DOCTYPE html>
 <html>
+
 <head>
     <title>Lista de redes</title>
 </head>
+
 <body>
+
     <h1>Hola {{ request.user.username }}, Esta es tu lista de redes</h1>
 
     <p>¿Quieres eliminar tu usuario?</p>
@@ -19,28 +21,57 @@
         <button type="submit">Crear red</button>
     </form>
 
-    {% if creada_red_5G %}
-        <p>✅ Red 5G creada correctamente</p>
-        <form action="{% url 'delete_net_5G' %}" method="post">
-            {% csrf_token %}
-            <button type="submit">Eliminar red 5G</button>
-        </form>
+    {% if creada_red_5G_open %}
+    <p>✅ Red 5G open5G creada correctamente</p>
+    <form action="{% url 'delete_net_5G' 'open' 'False' %}" method="post">
+        {% csrf_token %}
+        <button type="submit">Eliminar red open5G</button>
+    </form>
+    <form action="{% url 'view_net_5G' 'open' %}" method="post">
+        {% csrf_token %}
+        <button type="submit">Ver red open5G</button>
+    </form>
     {% else %}
-        <p>❌ No se ha creado tu red 5G</p>
+    <p>❌ No se ha creado tu red open5G</p>
     {% endif %}
+
+    {% if creada_red_5G_free %}
+    <p>✅ Red 5G free5G creada correctamente</p>
+    <form action="{% url 'delete_net_5G' 'free' 'False' %}" method="post">
+        {% csrf_token %}
+        <button type="submit">Eliminar red free5G</button>
+    </form>
+    <form action="{% url 'view_net_5G' 'free' %}" method="post">
+        {% csrf_token %}
+        <button type="submit">Ver red free5G</button>
+    </form>
+    {% else %}
+    <p>❌ No se ha creado tu red free5G</p>
+    {% endif %}
+
 
     {% if creada_red_gen %}
-        <p>✅ Red genérica creada correctamente</p>
-        <form action="{% url 'delete_net_gen' %}" method="post">
-            {% csrf_token %}
-            <button type="submit">Eliminar red genérica</button>
-        </form>
+    <p>✅ Red genérica creada correctamente</p>
+    <form action="{% url 'delete_net_gen' 'False' %}" method="post">
+        {% csrf_token %}
+        <button type="submit">Eliminar red genérica</button>
+    </form>
+    <form action="{% url 'view_net_gen' %}" method="post">
+        {% csrf_token %}
+        <button type="submit">Ver red Genérica</button>
+    </form>
     {% else %}
-        <p>❌ No se ha creado tu red genérica</p>
-
+    <p>❌ No se ha creado tu red genérica</p>
     {% endif %}
 
 
-
+    {% if mensaje %}
+    <script>
+        alert("{{ mensaje|escapejs }}");
+    </script>
+    {% endif %}
+    
+    
 </body>
+
 </html>

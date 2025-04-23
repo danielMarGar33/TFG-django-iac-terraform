@@ -3,7 +3,8 @@ from django import forms
 
 class NetworkForm(forms.Form):
     OPCION_CHOICES = [
-        ('opcion5G', 'Red 5G'),
+        ('opcion5G_open', 'Red open5G'),
+        ('opcion5G_free', 'Red free5G'),
         ('opcionGen', 'Red Genérica'),
     ]
 
