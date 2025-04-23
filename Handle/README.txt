@@ -1,1 +1,0 @@
-.\handle64.exe "C:\Users\pmg12\Desktop\RSTI-TFG\TFG\Proyecto Django\terraform\Daniel"
