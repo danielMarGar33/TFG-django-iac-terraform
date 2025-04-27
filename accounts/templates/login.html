@@ -1,10 +1,28 @@
 {% extends "base.html" %}
+
+{% block title %}Iniciar Sesión{% endblock %}
+
 {% block content %}
-<h2>Iniciar Sesión</h2>
-<form method="post">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">Ingresar</button>
-</form>
-<a href="{% url 'register' %}">¿No tienes cuenta? Regístrate</a>
+<div class="d-flex justify-content-center align-items-center" style="min-height: 80vh;">
+    <div class="card p-4" style="width: 100%; max-width: 400px;">
+        <h2 class="text-center mb-4">Iniciar Sesión</h2>
+        <form method="post">
+            {% csrf_token %}
+            {{ form.as_p }}
+            <div class="d-grid mt-3">
+                <button type="submit" class="btn btn-primary">Entrar</button>
+            </div>
+        </form>
+        <div class="text-center mt-3">
+            <p>¿No tienes cuenta? <a href="{% url 'register' %}">Regístrate aquí</a></p>
+        </div>
+        <div class="text-center mt-3">
+            <p>¿Eres administrador? 
+                <a href="{% url 'admin:index' %}" class="btn btn-outline-primary btn-sm">
+                    Acceder al panel de administración
+                </a>
+            </p>
+        </div>
+    </div>
+</div>
 {% endblock %}

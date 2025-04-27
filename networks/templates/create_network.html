@@ -1,32 +1,39 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Crear Red OpenStack</title>
-</head>
-<body>
-    <h1>Crear Nueva Red en OpenStack</h1>
-    <form method="post">
-        {% csrf_token %}
-        <label for="opciones">Elige el tipo de red:</label>
-        <select id="opciones" name="opciones">
-            {% if not creada_red_5G_open %}
-                <option value="opcion5G_open">Red open5G</option>
-            {% endif %}
-            {% if not creada_red_5G_free %}
-                <option value="opcion5G_free">Red free5G</option>
-            {% endif %}
-            {% if not creada_red_gen %}
-                <option value="opcionGen">Red Genérica</option>
-            {% endif %}
-        </select>
-        <br><br>
-        <button type="submit">Crear Red</button>
-    </form>
+{% extends "base.html" %}
 
-    <br>
-    <!-- Botón para volver a la lista de redes -->
-    <a href="/network-list">
-        <button>Volver a la Lista de Redes</button>
-    </a>
-</body>
-</html>
+{% block title %}Crear Red{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <h2 class="mb-4">Crear Nueva Red en OpenStack</h2>
+        <form method="post" class="card card-body shadow">
+            {% csrf_token %}
+            <div class="mb-3">
+                <label for="opciones" class="form-label">Elige el tipo de red:</label>
+                <select id="opciones" name="opciones" class="form-select" required>
+                    {% if not creada_red_5G_open %}
+                        <option value="opcion5G_open">Red open5G</option>
+                    {% endif %}
+                    {% if not creada_red_5G_free %}
+                        <option value="opcion5G_free">Red free5G</option>
+                    {% endif %}
+                    {% if not creada_red_gen %}
+                        <option value="opcionGen">Red Genérica</option>
+                    {% endif %}
+                </select>
+            </div>
+
+            <div class="mb-3">
+                <label for="ssh_password" class="form-label">Contraseña SSH:</label>
+                <input type="password" id="ssh_password" name="ssh_password" class="form-control" required>
+            </div>
+
+            <button type="submit" class="btn btn-success w-100">Crear Red</button>
+        </form>
+
+        <div class="text-center mt-3">
+            <a href="{% url 'network_list' %}" class="btn btn-secondary">Volver a la Lista de Redes</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,15 @@
+<h2>Dirección IP Asignada al broker de la red genérica :</h2>
+<ul>
+    {% if broker_gen_mgmt_ip %} <li>Generic Network Broker IP: {{ broker_gen_mgmt_ip }}</li> {% endif %}
+</ul>
+
+<h2>Dirección IP Asignada a la red genérica :</h2>
+<ul>
+    {% if instance_gen_mgmt_ip %} <li>Instance Management IP: {{ instance_gen_mgmt_ip }}</li> {% endif %}
+    {% if instance_gen_ip %} <li>Instance Network IP: {{ instance_gen_ip }}</li> {% endif %}
+</ul>
+
+<form action="{% url 'network_list' %}" method="post">
+    {% csrf_token %}
+    <button type="submit">Volver</button>
+</form>

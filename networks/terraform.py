@@ -1,5 +1,4 @@
 import subprocess, os, shutil
-from django.shortcuts import redirect
 
 #Ctrl K + C to comment the selected lines
 #Ctrl K + U to uncomment the selected lines
@@ -57,25 +56,33 @@ def terraform_apply_output(username):
 
 
 def terraform_init_apply_output(username):
+  try:
     subprocess.run(f"cd terraform/{username} && terraform init -upgrade && terraform apply -auto-approve && terraform output -json > terraform_outputs.json", shell=True, check=True)
     backup_creation_terraform(username) 
+  except subprocess.CalledProcessError as e:
+    print(f"Error al aplicar terraform: {e}")
+    terraform_init_apply_output(username)
 
 def terraform_destroy(username):
-    subprocess.run(f"cd terraform/{username} && terraform destroy -auto-approve", shell=True)
+  try:
+    subprocess.run(f"cd terraform/{username} && terraform destroy -auto-approve", check=True, shell=True)
+  except subprocess.CalledProcessError as e:
+    print(f"Error al destruir terraform: {e}")
+    terraform_destroy(username)
 
 
 # def terraform_apply(username):
-#      return 1
+#      return 0
 
 # def terraform_apply_output(username):
-#      return 1
+#      return 0
 
 # def terraform_init_apply_output(username):
 #      subprocess.run(f"cp terraform/terraform_outputs.json terraform/{username}", shell=True, check=True)
-#      return 1
+#      return 0
 
 # def terraform_destroy(username):
-#      return 1
+#      return 0
     
 
 def terraform_template():
@@ -186,20 +193,12 @@ resource "openstack_compute_instance_v2" "{username}_{type}5G_broker" {{
   image_id  = "db02fc5c-cacc-42be-8e5f-90f2db65cf7c"
   flavor_id = "101"
   user_data = <<-EOF
-              #!/bin/bash
-              # Deshabilitar el acceso SSH para el usuario root
-              echo "PermitRootLogin no" >> /etc/ssh/sshd_config
-              
-              # Crear un nuevo usuario
-              useradd -m {username}
-              
+              #!/bin/bash             
               # Establecer la contrasena para el nuevo usuario (puedes cambiarla)
-              echo "{username}:{password}" | chpasswd
-              usermod -aG sudo {username}
+              echo "root:{password}" | chpasswd
 
               # Asegurarse de que el usuario pueda acceder a traves de SSH
               echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
-              echo "AllowUsers {username}" >> /etc/ssh/sshd_config
 
               # Reiniciar el servicio SSH para que los cambios tomen efecto
               systemctl restart sshd
@@ -293,6 +292,17 @@ resource "openstack_compute_instance_v2" "{username}_{type}5G_UE" {{
   name      = "{username}_{type}5G_UE"
   image_id  = "db02fc5c-cacc-42be-8e5f-90f2db65cf7c"
   flavor_id = "101"
+  user_data = <<-EOF
+            #!/bin/bash             
+            # Establecer la contrasena para el nuevo usuario (puedes cambiarla)
+            echo "root:{password}" | chpasswd
+
+            # Asegurarse de que el usuario pueda acceder a traves de SSH
+            echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
+
+            # Reiniciar el servicio SSH para que los cambios tomen efecto
+            systemctl restart sshd
+            EOF
   network {{
     port = openstack_networking_port_v2.{username}_UE_AGF_{type}5G_port.id
   }}
@@ -351,6 +361,17 @@ resource "openstack_compute_instance_v2" "{username}_{type}5G_AGF" {{
   name      = "{username}_{type}5G_AGF"
   image_id  = "db02fc5c-cacc-42be-8e5f-90f2db65cf7c"
   flavor_id = "101"
+  user_data = <<-EOF
+            #!/bin/bash             
+            # Establecer la contrasena para el nuevo usuario (puedes cambiarla)
+            echo "root:{password}" | chpasswd
+
+            # Asegurarse de que el usuario pueda acceder a traves de SSH
+            echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
+
+            # Reiniciar el servicio SSH para que los cambios tomen efecto
+            systemctl restart sshd
+            EOF
   network {{
     port = openstack_networking_port_v2.{username}_AGF_UE_{type}5G_port.id
   }}
@@ -410,6 +431,17 @@ resource "openstack_compute_instance_v2" "{username}_{type}5G_core5G" {{
   name      = "{username}_{type}5G_core5G"
   image_id  = "{core_image}"
   flavor_id = "101"
+  user_data = <<-EOF
+            #!/bin/bash             
+            # Establecer la contrasena para el nuevo usuario (puedes cambiarla)
+            echo "root:{password}" | chpasswd
+
+            # Asegurarse de que el usuario pueda acceder a traves de SSH
+            echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
+
+            # Reiniciar el servicio SSH para que los cambios tomen efecto
+            systemctl restart sshd
+            EOF
   network {{
     port = openstack_networking_port_v2.{username}_core5G_server_{type}5G_port.id
   }}
@@ -438,7 +470,7 @@ resource "openstack_networking_port_v2" "{username}_server_mgmt_{type}5G_port" {
   }}
 }}
 
-# Puerto para el server en la subred de internet
+# Puerto para el server en la subred de core5g
 resource "openstack_networking_port_v2" "{username}_server_core5G_{type}5G_port" {{
   name       = "{username}_server_core5G_{type}5G_port"
   network_id = openstack_networking_network_v2.{username}_{type}5G_network.id
@@ -456,6 +488,17 @@ resource "openstack_compute_instance_v2" "{username}_{type}5G_server" {{
   name      = "{username}_{type}5G_server"
   image_id  = "db02fc5c-cacc-42be-8e5f-90f2db65cf7c"
   flavor_id = "101"
+  user_data = <<-EOF
+            #!/bin/bash             
+            # Establecer la contrasena para el nuevo usuario (puedes cambiarla)
+            echo "root:{password}" | chpasswd
+
+            # Asegurarse de que el usuario pueda acceder a traves de SSH
+            echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
+
+            # Reiniciar el servicio SSH para que los cambios tomen efecto
+            systemctl restart sshd
+            EOF
   network {{
     port = openstack_networking_port_v2.{username}_server_core5G_{type}5G_port.id
   }}
@@ -483,6 +526,25 @@ output "server_{type}5G_mgmt_ip" {{
 output "broker_{type}5G_mgmt_ip" {{
   value = openstack_networking_floatingip_v2.{username}_{type}5G_mgmt_floating_ip.address
 }}
+output "UE_{type}5G_UE_ip" {{
+  value = openstack_networking_port_v2.{username}_UE_AGF_{type}5G_port.all_fixed_ips
+}}
+output "AGF_{type}5G_UE_ip" {{
+  value = openstack_networking_port_v2.{username}_AGF_UE_{type}5G_port.all_fixed_ips
+}}
+output "AGF_{type}5G_core5G_ip" {{
+  value = openstack_networking_port_v2.{username}_AGF_core5G_{type}5G_port.all_fixed_ips
+}}
+output "core5G_{type}5G_AGF_ip" {{
+  value = openstack_networking_port_v2.{username}_core5G_AGF_{type}5G_port.all_fixed_ips
+}}
+output "core5G_{type}5G_server_ip" {{
+  value = openstack_networking_port_v2.{username}_core5G_server_{type}5G_port.all_fixed_ips
+}}
+output "server_{type}5G_core5G_ip" {{
+  value = openstack_networking_port_v2.{username}_server_core5G_{type}5G_port.all_fixed_ips
+}}
+
 
 """
 
@@ -570,20 +632,12 @@ resource "openstack_compute_instance_v2" "{username}_gen_broker" {{
   image_id  = "db02fc5c-cacc-42be-8e5f-90f2db65cf7c"
   flavor_id = "101"
   user_data = <<-EOF
-              #!/bin/bash
-              # Deshabilitar el acceso SSH para el usuario root
-              echo "PermitRootLogin no" >> /etc/ssh/sshd_config
-              
-              # Crear un nuevo usuario
-              useradd -m {username}
-              
+              #!/bin/bash             
               # Establecer la contrasena para el nuevo usuario (puedes cambiarla)
-              echo "{username}:{password}" | chpasswd
-              usermod -aG sudo {username}
+              echo "root:{password}" | chpasswd
 
               # Asegurarse de que el usuario pueda acceder a traves de SSH
               echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
-              echo "AllowUsers {username}" >> /etc/ssh/sshd_config
 
               # Reiniciar el servicio SSH para que los cambios tomen efecto
               systemctl restart sshd
@@ -651,6 +705,17 @@ resource "openstack_compute_instance_v2" "{username}_gen_instance" {{
   name      = "{username}_gen_instance"
   image_id  = "db02fc5c-cacc-42be-8e5f-90f2db65cf7c"
   flavor_id = "101"
+  user_data = <<-EOF
+            #!/bin/bash             
+            # Establecer la contrasena para el nuevo usuario (puedes cambiarla)
+            echo "root:{password}" | chpasswd
+
+            # Asegurarse de que el usuario pueda acceder a traves de SSH
+            echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
+
+            # Reiniciar el servicio SSH para que los cambios tomen efecto
+            systemctl restart sshd
+            EOF
   network {{
     port = openstack_networking_port_v2.{username}_instance_gen_port.id
   }}
@@ -668,5 +733,8 @@ output "instance_mgmt_ip" {{
 }}
 output "broker_gen_mgmt_ip" {{
   value = openstack_networking_floatingip_v2.{username}_gen_mgmt_floating_ip.address
+}}
+output "instance_gen_ip" {{
+  value = openstack_networking_port_v2.{username}_instance_gen_port.all_fixed_ips
 }}
 """

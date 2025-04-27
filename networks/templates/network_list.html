@@ -1,77 +1,102 @@
-<!DOCTYPE html>
-<html>
+{% extends "base.html" %}
 
-<head>
-    <title>Lista de redes</title>
-</head>
+{% block title %}Lista de Redes{% endblock %}
 
-<body>
+{% block content %}
+<div class="text-center mb-4">
+    <h2>Hola {{ request.user.username }}, esta es tu lista de redes</h2>
+</div>
 
-    <h1>Hola {{ request.user.username }}, Esta es tu lista de redes</h1>
-
-    <p>¿Quieres eliminar tu usuario?</p>
-    <form action="{% url 'delete_user' %}" method="post">
-        {% csrf_token %}
-        <button type="submit">Eliminar usuario</button>
-    </form>
-
-    <p>¿Quieres crear una red?</p>
+<div class="d-grid gap-2 mb-4">
     <form action="{% url 'create_network' %}" method="post">
         {% csrf_token %}
-        <button type="submit">Crear red</button>
+        <button type="submit" class="btn btn-success">Crear nueva red</button>
     </form>
+</div>
 
-    {% if creada_red_5G_open %}
-    <p>✅ Red 5G open5G creada correctamente</p>
+{% if creada_red_5G_open %}
+<div class="alert alert-success">
+    ✅ Red 5G Open creada correctamente
+</div>
+<div class="d-grid gap-2 mb-3">
     <form action="{% url 'delete_net_5G' 'open' 'False' %}" method="post">
         {% csrf_token %}
-        <button type="submit">Eliminar red open5G</button>
+        <button type="submit" class="btn btn-danger">Eliminar red Open5G</button>
     </form>
     <form action="{% url 'view_net_5G' 'open' %}" method="post">
         {% csrf_token %}
-        <button type="submit">Ver red open5G</button>
+        <button type="submit" class="btn btn-primary">Ver red Open5G</button>
     </form>
-    {% else %}
-    <p>❌ No se ha creado tu red open5G</p>
-    {% endif %}
+</div>
+{% else %}
+<div class="alert alert-danger">
+    ❌ No se ha creado tu red Open5G
+</div>
+{% endif %}
 
-    {% if creada_red_5G_free %}
-    <p>✅ Red 5G free5G creada correctamente</p>
+{% if creada_red_5G_free %}
+<div class="alert alert-success">
+    ✅ Red 5G Free creada correctamente
+</div>
+<div class="d-grid gap-2 mb-3">
     <form action="{% url 'delete_net_5G' 'free' 'False' %}" method="post">
         {% csrf_token %}
-        <button type="submit">Eliminar red free5G</button>
+        <button type="submit" class="btn btn-danger">Eliminar red Free5G</button>
     </form>
     <form action="{% url 'view_net_5G' 'free' %}" method="post">
         {% csrf_token %}
-        <button type="submit">Ver red free5G</button>
+        <button type="submit" class="btn btn-primary">Ver red Free5G</button>
     </form>
-    {% else %}
-    <p>❌ No se ha creado tu red free5G</p>
-    {% endif %}
+</div>
+{% else %}
+<div class="alert alert-danger">
+    ❌ No se ha creado tu red Free5G
+</div>
+{% endif %}
 
-
-    {% if creada_red_gen %}
-    <p>✅ Red genérica creada correctamente</p>
+{% if creada_red_gen %}
+<div class="alert alert-success">
+    ✅ Red Genérica creada correctamente
+</div>
+<div class="d-grid gap-2 mb-3">
     <form action="{% url 'delete_net_gen' 'False' %}" method="post">
         {% csrf_token %}
-        <button type="submit">Eliminar red genérica</button>
+        <button type="submit" class="btn btn-danger">Eliminar red Genérica</button>
     </form>
     <form action="{% url 'view_net_gen' %}" method="post">
         {% csrf_token %}
-        <button type="submit">Ver red Genérica</button>
+        <button type="submit" class="btn btn-primary">Ver red Genérica</button>
     </form>
-    {% else %}
-    <p>❌ No se ha creado tu red genérica</p>
-    {% endif %}
+</div>
+{% else %}
+<div class="alert alert-danger">
+    ❌ No se ha creado tu red Genérica
+</div>
+{% endif %}
 
+<hr class="my-4">
 
-    {% if mensaje %}
-    <script>
-        alert("{{ mensaje|escapejs }}");
-    </script>
-    {% endif %}
-    
-    
-</body>
+<div class="d-grid gap-2">
+    <form action="{% url 'logout' %}" method="post">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-secondary">Cerrar sesión</button>
+    </form>
+    <form action="{% url 'delete_user' %}" method="post">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Eliminar usuario</button>
+    </form>
+</div>
 
-</html>
+{# Sistema de mensajes de Django #}
+
+{% if messages %}
+{% for message in messages %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    alert("{{ message|escapejs }}");
+});
+</script>
+{% endfor %}
+{% endif %}
+
+{% endblock %}

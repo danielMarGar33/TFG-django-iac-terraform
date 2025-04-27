@@ -1,13 +1,13 @@
 from django.urls import path
+from django.contrib import admin
 from networks.views import create_network, network_list, delete_net_5G, delete_net_gen, view_net_5G, view_net_gen
 from accounts.views import register, custom_login, custom_logout, delete_user
-from accounts.views import error_page  # Importa la vista error_page
+from accounts.views import error_page
 
-# Asignar la vista error_page para manejar los errores 404 y 500
 handler404 = error_page
-handler500 = error_page
 
 urlpatterns = [
+    path('admin/', admin.site.urls),
     path('create-network/', create_network, name='create_network'),
     path('network-list/', network_list, name='network_list'),
     path('delete_net_5G/<str:type>/<str:flag>/', delete_net_5G, name='delete_net_5G'),
@@ -18,6 +18,11 @@ urlpatterns = [
     path('login/', custom_login, name='login'),
     path('', custom_login, name='home'),
     path('logout/', custom_logout, name='logout'),
-    path('delete_user/', delete_user, name='delete_user'),  
-
+    path('delete_user/', delete_user, name='delete_user'),
 ]
+
+from django.conf import settings
+from django.conf.urls.static import static
+
+if settings.DEBUG:
+    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATIC_ROOT)

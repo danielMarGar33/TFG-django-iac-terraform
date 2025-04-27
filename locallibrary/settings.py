@@ -11,6 +11,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
 from pathlib import Path
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -22,8 +23,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-&0de(o)xblo#lzpi4n2zxzi%n(xrvlqhvi=a1^w)7s@4a_dj@='
 
-DEBUG = True
-ALLOWED_HOSTS = ['localhost', '127.0.0.1']  
+DEBUG = False
+ALLOWED_HOSTS = ['localhost', '127.0.0.1'] 
+
+STATIC_URL = '/static/'
+STATICFILES_DIRS = [ BASE_DIR / 'static' ]  # Aquí tus propios CSS/JS
+STATIC_ROOT = BASE_DIR / 'staticfiles'      # Donde se juntan todos (admin + tuyos)
 
 LOGIN_URL = '/login/'
 
@@ -40,6 +45,7 @@ INSTALLED_APPS = [
 ]
 
 MIDDLEWARE = [
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -121,3 +127,4 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'

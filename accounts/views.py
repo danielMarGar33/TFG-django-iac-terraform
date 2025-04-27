@@ -12,13 +12,8 @@ def register(request):
         form = UserCreationForm(request.POST)
         if form.is_valid():
             user = form.save()
+
             login(request, user)  # Inicia sesión automáticamente después de registrarse
-            
-            # Obtén la contrasena SSH del formulario
-            ssh_password = request.POST.get("ssh_password")
-            
-            # Guarda la contrasena SSH en la sesión
-            request.session['ssh_password'] = ssh_password
             
             request.session['isNew'] = True  # Guardar el estado en la sesión
             return redirect('network_list')  # Redirige a la página principal

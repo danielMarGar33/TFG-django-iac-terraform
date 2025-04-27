@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Esquema de Red {{ type }}{% endblock %}
+
+{% block content %}
+
+<style>
+  .diagram-container {
+    position: relative;
+    width: 100%;
+    max-width: 850px;
+    height: 550px;
+    background-image: url("{% static 'Esquema_red_5G.png' %}");
+    background-repeat: no-repeat;
+    background-position: center;
+    background-size: contain;
+    margin: 0 auto;
+  }
+  .diagram-container div {
+    box-sizing: border-box;
+  }
+  .ip-text {
+    font-size: 0.90rem;
+    color: rgb(0, 0, 0);
+    font-weight: bold;
+  }
+  .variable-highlight {
+    background-color: #f0f0f0; /* Gris clarito */
+    border-radius: 4px; /* Esquinas redondeadas */
+    padding: 0 4px; /* Un poco de espacio alrededor */
+    display: inline-block; /* Para que el fondo se ajuste al texto */
+  }
+</style>
+
+<div class="container text-align">
+    <h1 class="mb-4">Red {{ type }}</h1>
+
+    <div class="card p-4 mb-5">
+        <h2 class="mb-3">Acceso al broker por SSH:</h2>
+        <pre><code>ssh root@<span class="variable-highlight">{{ broker_5G_mgmt_ip }}</span></code></pre>
+
+        <h2 class="mt-4 mb-3">En caso de cambio de la clave de host:</h2>
+        <pre><code>ssh-keygen -R <span class="variable-highlight">{{ broker_5G_mgmt_ip }}</span>
+ssh root@<span class="variable-highlight">{{ broker_5G_mgmt_ip }}</span></code></pre>
+    </div>
+
+    <!-- Ahora el esquema también es una tarjeta -->
+    <div class="card p-4 mb-5">
+        <h2 class="mb-3">Esquema de Red {{ type }}</h2>
+
+        <div class="diagram-container">
+            <!-- BROKER -->
+            <div style="position: absolute; top: 135px; left: 440px; text-align: center;">
+                <small class="ip-text"><span class="variable-highlight">{{ broker_5G_mgmt_ip }}</span></small>
+            </div>
+
+            <!-- UE -->
+            <div style="position: absolute; top: 330px; left: 10px; text-align: center;">
+                <small class="ip-text"><span class="variable-highlight">{{ UE_5G_mgmt_ip }}</span></small>
+            </div>
+
+            <!-- AGF -->
+            <div style="position: absolute; top: 330px; left: 250px; text-align: center;">
+                <small class="ip-text"><span class="variable-highlight">{{ AGF_5G_mgmt_ip }}</span></small>
+            </div>
+
+            <!-- CORE5G -->
+            <div style="position: absolute; top: 330px; left: 525px; text-align: center;">
+                <small class="ip-text"><span class="variable-highlight">{{ core5G_5G_mgmt_ip }}</span></small>
+            </div>
+
+            <!-- SERVER -->
+            <div style="position: absolute; top: 330px; left: 765px; text-align: center;">
+                <small class="ip-text"><span class="variable-highlight">{{ server_5G_mgmt_ip }}</span></small>
+            </div>
+
+            <!-- Comunicación -->
+            <div style="position: absolute; top: 380px; left: 129px;" class="ip-text"><span class="variable-highlight">{{ UE_5G_UE_ip }}</span></div>
+            <div style="position: absolute; top: 420px; left: 163px;" class="ip-text"><span class="variable-highlight">{{ AGF_5G_UE_ip }}</span></div>
+            <div style="position: absolute; top: 380px; left: 370px;" class="ip-text"><span class="variable-highlight">{{ AGF_5G_core5G_ip }}</span></div>
+            <div style="position: absolute; top: 420px; left: 407px;" class="ip-text"><span class="variable-highlight">{{ core5G_5G_AGF_ip }}</span></div>
+            <div style="position: absolute; top: 380px; left: 612px;" class="ip-text"><span class="variable-highlight">{{ core5G_5G_server_ip }}</span></div>
+            <div style="position: absolute; top: 420px; left: 644px;" class="ip-text"><span class="variable-highlight">{{ server_5G_core5G_ip }}</span></div>
+        </div>
+    </div>
+
+    <form action="{% url 'network_list' %}" method="post">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-primary btn-lg">Volver</button>
+    </form>
+</div>
+
+{% endblock %}
