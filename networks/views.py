@@ -6,7 +6,7 @@ from django.contrib.auth import get_user
 from django.urls import reverse
 from .models import UserNetwork, UserSubnet, SSH_password, UserIP, UserDeployedNetworks
 from .forms import NetworkForm
-from .terraform import append_section_5G, append_section_gen, terraform_template, terraform_apply, terraform_apply_output, terraform_init_apply_output, terraform_destroy
+from .terraform import append_section_5G, append_section_gen, terraform_template, terraform_apply, terraform_apply_output, terraform_init_apply
 import os, re, ipaddress, json
 
 
@@ -38,6 +38,12 @@ def asignar_flag_red(usuario, tipo_red):
         UserDeployedNetworks.objects.update_or_create(user=usuario, defaults={"open5G_deployed": True})
     elif tipo_red == "gen":
         UserDeployedNetworks.objects.update_or_create(user=usuario, defaults={"gen_deployed": True})
+    elif tipo_red == "free_error":
+        UserDeployedNetworks.objects.update_or_create(user=usuario, defaults={"free5G_error": True})
+    elif tipo_red == "open_error":
+        UserDeployedNetworks.objects.update_or_create(user=usuario, defaults={"open5G_error": True})
+    elif tipo_red == "gen_error":
+        UserDeployedNetworks.objects.update_or_create(user=usuario, defaults={"gen_error": True})
 
 def eliminar_flag_red(usuario, tipo_red):
     if tipo_red == "free":
@@ -46,6 +52,13 @@ def eliminar_flag_red(usuario, tipo_red):
         UserDeployedNetworks.objects.update_or_create(user=usuario, defaults={"open5G_deployed": False})
     elif tipo_red == "gen":
         UserDeployedNetworks.objects.update_or_create(user=usuario, defaults={"gen_deployed": False})
+    elif tipo_red == "free_error":
+        UserDeployedNetworks.objects.update_or_create(user=usuario, defaults={"free5G_error": False})
+    elif tipo_red == "open_error":
+        UserDeployedNetworks.objects.update_or_create(user=usuario, defaults={"open5G_error": False})
+    elif tipo_red == "gen_error":
+        UserDeployedNetworks.objects.update_or_create(user=usuario, defaults={"gen_error": False})
+    
 
 def obtener_flag_red(usuario, tipo_red):
     """ Devuelve el valor de la bandera de la red """
@@ -56,6 +69,12 @@ def obtener_flag_red(usuario, tipo_red):
             return UserDeployedNetworks.objects.get(user=usuario).open5G_deployed
         elif tipo_red == "gen":
             return UserDeployedNetworks.objects.get(user=usuario).gen_deployed
+        elif tipo_red == "free_error":
+            return UserDeployedNetworks.objects.get(user=usuario).free5G_error
+        elif tipo_red == "open_error":
+            return UserDeployedNetworks.objects.get(user=usuario).open5G_error
+        elif tipo_red == "gen_error":
+            return UserDeployedNetworks.objects.get(user=usuario).gen_error
     except UserDeployedNetworks.DoesNotExist:
         return False
 
@@ -168,7 +187,9 @@ def create_initial_config(request):
         with open(main_tf_path, "w") as f:
             f.write(terraform_config)
 
-        terraform_init_apply_output(usuario.username)
+        flag = terraform_init_apply(usuario.username)
+        if flag:
+            redirect('delete_user')
 
 
 @login_required
@@ -185,11 +206,17 @@ def network_list(request):
     creada_red_5G_open = obtener_flag_red(request.user, "open")
     creada_red_5G_free = obtener_flag_red(request.user, "free")
     creada_red_gen = obtener_flag_red(request.user, "gen")  
+    error_red_5G_open = obtener_flag_red(request.user, "open_error")
+    error_red_5G_free = obtener_flag_red(request.user, "free_error")
+    error_red_gen = obtener_flag_red(request.user, "gen_error")
 
     context = {
         'creada_red_5G_open': creada_red_5G_open,
         'creada_red_5G_free': creada_red_5G_free,
         'creada_red_gen': creada_red_gen,
+        'error_red_5G_open': error_red_5G_open,
+        'error_red_5G_free': error_red_5G_free,
+        'error_red_gen': error_red_gen,
     }
 
     return render(request, 'network_list.html', context)
@@ -206,35 +233,43 @@ def create_network(request):
             Is5G_open = form.cleaned_data['opciones'] == 'opcion5G_open'
             Is5G_free = form.cleaned_data['opciones'] == 'opcion5G_free'
             IsGen = form.cleaned_data['opciones'] == 'opcionGen'
+            flag_error_open = obtener_flag_red(usuario, "open_error")
+            flag_error_free = obtener_flag_red(usuario, "free_error")
+            flag_error_gen = obtener_flag_red(usuario, "gen_error")
 
 
             if Is5G_open or Is5G_free:
 
-                asignar_contraseña_ssh(usuario, request.POST.get('ssh_password'), "open") if Is5G_open else asignar_contraseña_ssh(usuario, request.POST.get('ssh_password'), "free")
-                type = "open" if Is5G_open else "free"
-                core = CORE_OPEN_IMAGE if Is5G_open else CORE_FREE_IMAGE
+                if (Is5G_free and not flag_error_free) or (Is5G_open and not flag_error_open):
 
-                assigned_nets = list(UserNetwork.objects.values_list('network_cidr', flat=True))
-                red_unica = obtener_subred_unica(BASE_CIDR, assigned_nets, NET_MASK)
-                asignar_red_usuario(usuario, red_unica, f"user_{type}5G_mgmt_network")
+                    asignar_contraseña_ssh(usuario, request.POST.get('ssh_password'), "open") if Is5G_open else asignar_contraseña_ssh(usuario, request.POST.get('ssh_password'), "free")
+                    type = "open" if Is5G_open else "free"
+                    core = CORE_OPEN_IMAGE if Is5G_open else CORE_FREE_IMAGE
 
-                assigned_nets = list(UserNetwork.objects.values_list('network_cidr', flat=True))
-                red_unica = obtener_subred_unica(BASE_CIDR, assigned_nets, NET_MASK)
-                asignar_red_usuario(usuario, red_unica, f"user_{type}5G_network")
+                    assigned_nets = list(UserNetwork.objects.values_list('network_cidr', flat=True))
+                    red_unica = obtener_subred_unica(BASE_CIDR, assigned_nets, NET_MASK)
+                    asignar_red_usuario(usuario, red_unica, f"user_{type}5G_mgmt_network")
 
-                asignar_subred(usuario, f"subred_{type}5G_mgmt", obtener_subred_unica(obtener_red(usuario, f"user_{type}5G_mgmt_network"), obtener_subredes(usuario), SUBNET_MASK))
-                asignar_subred(usuario, f"subred_{type}5G_UE_AGF", obtener_subred_unica(obtener_red(usuario, f"user_{type}5G_network"), obtener_subredes(usuario), SUBNET_MASK))
-                asignar_subred(usuario, f"subred_{type}5G_AGF_core5G", obtener_subred_unica(obtener_red(usuario, f"user_{type}5G_network"), obtener_subredes(usuario), SUBNET_MASK))
-                asignar_subred(usuario, f"subred_{type}5G_core5G_server", obtener_subred_unica(obtener_red(usuario, f"user_{type}5G_network"), obtener_subredes(usuario), SUBNET_MASK))
+                    assigned_nets = list(UserNetwork.objects.values_list('network_cidr', flat=True))
+                    red_unica = obtener_subred_unica(BASE_CIDR, assigned_nets, NET_MASK)
+                    asignar_red_usuario(usuario, red_unica, f"user_{type}5G_network")
 
-                resultado = apply_terraform_5G(usuario, usuario.username, core, type)
+                    asignar_subred(usuario, f"subred_{type}5G_mgmt", obtener_subred_unica(obtener_red(usuario, f"user_{type}5G_mgmt_network"), obtener_subredes(usuario), SUBNET_MASK))
+                    asignar_subred(usuario, f"subred_{type}5G_UE_AGF", obtener_subred_unica(obtener_red(usuario, f"user_{type}5G_network"), obtener_subredes(usuario), SUBNET_MASK))
+                    asignar_subred(usuario, f"subred_{type}5G_AGF_core5G", obtener_subred_unica(obtener_red(usuario, f"user_{type}5G_network"), obtener_subredes(usuario), SUBNET_MASK))
+                    asignar_subred(usuario, f"subred_{type}5G_core5G_server", obtener_subred_unica(obtener_red(usuario, f"user_{type}5G_network"), obtener_subredes(usuario), SUBNET_MASK))
+                    resultado = apply_terraform_5G(usuario, usuario.username, core, type)
+                else:
+                    resultado = terraform_apply_output(usuario.username)
 
                 if resultado:
                     mensaje = f"Error al crear la red {type}5G"
+                    asignar_flag_red(usuario, f"{type}_error")
                     messages.error(request, mensaje)
                     return redirect(reverse('network_list'))
                 else:
                     asignar_flag_red(usuario, type)
+                    eliminar_flag_red(usuario, f"{type}_error")
                     messages.success(request, f"Red {type}5G creada correctamente")
                     
                     # Cargar la salida de Terraform
@@ -281,27 +316,32 @@ def create_network(request):
 
             elif IsGen:
                 
-                asignar_contraseña_ssh(usuario, request.POST.get('ssh_password'), "gen")
-                assigned_nets = list(UserNetwork.objects.values_list('network_cidr', flat=True))
-                red_unica = obtener_subred_unica(BASE_CIDR, assigned_nets, NET_MASK)
-                asignar_red_usuario(usuario, red_unica, "user_gen_mgmt_network")
+                if not flag_error_gen:
 
-                assigned_nets = list(UserNetwork.objects.values_list('network_cidr', flat=True))
-                red_unica = obtener_subred_unica(BASE_CIDR, assigned_nets, NET_MASK)
-                asignar_red_usuario(usuario, red_unica, "user_gen_network")
+                    asignar_contraseña_ssh(usuario, request.POST.get('ssh_password'), "gen")
+                    assigned_nets = list(UserNetwork.objects.values_list('network_cidr', flat=True))
+                    red_unica = obtener_subred_unica(BASE_CIDR, assigned_nets, NET_MASK)
+                    asignar_red_usuario(usuario, red_unica, "user_gen_mgmt_network")
 
-                asignar_subred(usuario, "subred_gen", obtener_subred_unica(obtener_red(usuario, "user_gen_network"), obtener_subredes(usuario), SUBNET_MASK))
-                asignar_subred(usuario, "subred_gen_mgmt", obtener_subred_unica(obtener_red(usuario, "user_gen_mgmt_network"), obtener_subredes(usuario), SUBNET_MASK))
+                    assigned_nets = list(UserNetwork.objects.values_list('network_cidr', flat=True))
+                    red_unica = obtener_subred_unica(BASE_CIDR, assigned_nets, NET_MASK)
+                    asignar_red_usuario(usuario, red_unica, "user_gen_network")
 
-                resultado = apply_terraform_gen(usuario, usuario.username) 
+                    asignar_subred(usuario, "subred_gen", obtener_subred_unica(obtener_red(usuario, "user_gen_network"), obtener_subredes(usuario), SUBNET_MASK))
+                    asignar_subred(usuario, "subred_gen_mgmt", obtener_subred_unica(obtener_red(usuario, "user_gen_mgmt_network"), obtener_subredes(usuario), SUBNET_MASK))
+                    resultado = apply_terraform_gen(usuario, usuario.username) 
+                else:
+                    resultado = terraform_apply_output(usuario.username)
 
                 if resultado:
                     mensaje = "Error al crear la red genérica"
+                    asignar_flag_red(usuario, "gen_error")
                     messages.error(request, mensaje)
                     return redirect(reverse('network_list'))
                 
                 else: 
                     asignar_flag_red(usuario, "gen")
+                    eliminar_flag_red(usuario, "gen_error")
                     messages.success(request, "Red genérica creada correctamente")
 
                     # Cargar la salida de Terraform
@@ -336,6 +376,7 @@ def create_network(request):
         return redirect(reverse('network_list'))
 
 def apply_terraform_gen(usuario, username):
+
     user_dir = os.path.join("terraform", username)
     os.makedirs(user_dir, exist_ok=True)
 
@@ -350,29 +391,8 @@ def apply_terraform_gen(usuario, username):
     with open(main_tf_path, "a") as f:
         f.write(append_section)
     
-    resultado = terraform_apply_output(username)
+    return terraform_apply_output(username)
 
-    if resultado:
-          
-        #Eliminar contraseña SSH
-        eliminar_contraseña_ssh(usuario, "gen")
-
-        #Eliminar las redes
-        eliminar_red_usuario(usuario, "user_gen_mgmt_network")
-        eliminar_red_usuario(usuario, "user_gen_network")
-
-        #Eliminar las subredes
-        eliminar_subred(usuario, "subred_gen")
-        eliminar_subred(usuario, "subred_gen_mgmt")
-
-        # Eliminar las IPs
-        eliminar_direccion_ip(usuario, "instance_mgmt_ip")
-        eliminar_direccion_ip(usuario, "broker_gen_mgmt_ip")
-        eliminar_direccion_ip(usuario, "instance_gen_ip")
-
-        return True
-    else:   
-        return False
 
 
 
@@ -395,40 +415,8 @@ def apply_terraform_5G(usuario, username, core_image, type):
     with open(main_tf_path, "a") as f:
         f.write(append_section)
     
-    resultado = terraform_apply_output(username)
+    return terraform_apply_output(username)
     
-    if resultado:
-
-        #Eliminar la contraseña SSH
-        eliminar_contraseña_ssh(usuario, type)
-
-        #Eliminar las redes
-        eliminar_red_usuario(usuario, f"user_{type}5G_mgmt_network")
-        eliminar_red_usuario(usuario, f"user_{type}5G_network")
-            
-        #Eliminar las subredese
-        eliminar_subred(usuario, f"subred_{type}5G_UE_AGF")
-        eliminar_subred(usuario, f"subred_{type}5G_AGF_core5G")
-        eliminar_subred(usuario, f"subred_{type}5G_core5G_server")
-        eliminar_subred(usuario, f"subred_{type}5G_mgmt")
-
-        # Eliminar las IPs
-        eliminar_direccion_ip(usuario, f"UE_{type}5G_mgmt_ip")
-        eliminar_direccion_ip(usuario, f"AGF_{type}5G_mgmt_ip")
-        eliminar_direccion_ip(usuario, f"core5G_{type}5G_mgmt_ip")
-        eliminar_direccion_ip(usuario, f"server_{type}5G_mgmt_ip")
-        eliminar_direccion_ip(usuario, f"broker_{type}5G_mgmt_ip")
-        eliminar_direccion_ip(usuario, f"UE_{type}5G_UE_ip")
-        eliminar_direccion_ip(usuario, f"AGF_{type}5G_UE_ip")
-        eliminar_direccion_ip(usuario, f"AGF_{type}5G_core5G_ip")
-        eliminar_direccion_ip(usuario, f"core5G_{type}5G_AGF_ip")
-        eliminar_direccion_ip(usuario, f"core5G_{type}5G_server_ip")
-        eliminar_direccion_ip(usuario, f"server_{type}5G_core5G_ip")
-
-        return True
-    else:
-        return False
-
 
 @login_required
 def delete_net_5G(request, type, flag):
@@ -500,10 +488,12 @@ def delete_net_5G(request, type, flag):
 
         mensaje = f"Red {type}5G eliminada correctamente"
         messages.success(request, mensaje)
+        eliminar_flag_red(usuario, f"{type}_error")
         return redirect('network_list')  
     
     else :
        mensaje = f"Error al eliminar la red {type}5G, se ha restaurado la configuración anterior."
+       asignar_flag_red(usuario, f"{type}_error")
        messages.error(request, mensaje)
        return redirect('network_list') 
 
@@ -557,11 +547,13 @@ def delete_net_gen(request, flag):
     
        mensaje = "Red genérica eliminada correctamente"
        messages.success(request, mensaje)
+       eliminar_flag_red(usuario, "gen_error")
        return redirect('network_list') 
     
     else :
        mensaje = f"Error al eliminar la red genérica, se ha restaurado la configuración anterior."
        messages.error(request, mensaje)
+       asignar_flag_red(usuario, "gen_error")
        return redirect('network_list') 
 
 

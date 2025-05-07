@@ -1,5 +1,6 @@
 from django.shortcuts import render, redirect
 from django.contrib.auth import login, logout, get_user
+from django.contrib import messages
 from django.contrib.auth.forms import UserCreationForm, AuthenticationForm
 from django.conf import settings
 from networks.terraform import terraform_destroy  # Asegúrate de que esta función esté definida en terraform.py
@@ -43,11 +44,17 @@ def delete_user(request):
     
     user = get_user(request)
     username = user.username  # Obtener el nombre de usuario antes de eliminarlo
+    flag = terraform_destroy(username)
+
+    if flag == True:
+       mensaje = f"Error al destruir las redes, se ha restaurado la configuración anterior."
+       messages.error(request, mensaje)
+       return redirect('network_list') 
+
 
     # Eliminar usuario de la base de datos y cerrar sesión
     user.delete()
     logout(request)
-    terraform_destroy(username)
 
     # Ruta del directorio del usuario
     user_dir = os.path.join(settings.BASE_DIR, "terraform", username)

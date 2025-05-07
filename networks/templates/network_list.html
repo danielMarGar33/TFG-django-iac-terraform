@@ -14,9 +14,18 @@
     </form>
 </div>
 
+<div class="d-grid gap-2 mb-4">
+    <form action="{% url 'import_networks' %}" method="post">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-success">Importar redes</button>
+    </form>
+    <span>Importa las redes de OpenStack al estado de Terraform. </span>
+    <p>Haz esto cuando haya un error al crear tu red. Este proceso puede tardar unos minutos...</p>
+</div>
+
 {% if creada_red_5G_open %}
 <div class="alert alert-success">
-    ✅ Red 5G Open creada correctamente
+    ✅ Red 5G Open desplegada
 </div>
 <div class="d-grid gap-2 mb-3">
     <form action="{% url 'delete_net_5G' 'open' 'False' %}" method="post">
@@ -28,6 +37,16 @@
         <button type="submit" class="btn btn-primary">Ver red Open5G</button>
     </form>
 </div>
+{% elif error_red_5G_open %}
+<div class="alert alert-warning">
+    ⚠️ Hubo un error al crear tu red Open5G. Importe la red y créela o elimínela para solucionarlo.
+</div>
+<div class="d-grid gap-2 mb-3">
+    <form action="{% url 'delete_net_5G' 'open' 'False' %}" method="post">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Eliminar red Open5G</button>
+    </form>
+</div>
 {% else %}
 <div class="alert alert-danger">
     ❌ No se ha creado tu red Open5G
@@ -36,7 +55,7 @@
 
 {% if creada_red_5G_free %}
 <div class="alert alert-success">
-    ✅ Red 5G Free creada correctamente
+    ✅ Red 5G Free desplegada
 </div>
 <div class="d-grid gap-2 mb-3">
     <form action="{% url 'delete_net_5G' 'free' 'False' %}" method="post">
@@ -48,6 +67,16 @@
         <button type="submit" class="btn btn-primary">Ver red Free5G</button>
     </form>
 </div>
+{% elif error_red_5G_free %}
+<div class="alert alert-warning">
+    ⚠️ Hubo un error al crear tu red Free5G. Importe la red y créela o elimínela para solucionarlo.
+</div>
+<div class="d-grid gap-2 mb-3">
+    <form action="{% url 'delete_net_5G' 'free' 'False' %}" method="post">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Eliminar red Free5G</button>
+    </form>
+</div>
 {% else %}
 <div class="alert alert-danger">
     ❌ No se ha creado tu red Free5G
@@ -56,7 +85,7 @@
 
 {% if creada_red_gen %}
 <div class="alert alert-success">
-    ✅ Red Genérica creada correctamente
+    ✅ Red Genérica desplegada
 </div>
 <div class="d-grid gap-2 mb-3">
     <form action="{% url 'delete_net_gen' 'False' %}" method="post">
@@ -68,11 +97,22 @@
         <button type="submit" class="btn btn-primary">Ver red Genérica</button>
     </form>
 </div>
+{% elif error_red_gen %}
+<div class="alert alert-warning">
+    ⚠️ Hubo un error al crear tu red Genérica. Importe la red y créela o elimínela para solucionarlo.
+</div>
+<div class="d-grid gap-2 mb-3">
+    <form action="{% url 'delete_net_gen' 'False' %}" method="post">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Eliminar red Genérica</button>
+    </form>
+</div>
 {% else %}
 <div class="alert alert-danger">
     ❌ No se ha creado tu red Genérica
 </div>
 {% endif %}
+
 
 <hr class="my-4">
 

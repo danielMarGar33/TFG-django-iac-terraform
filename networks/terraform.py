@@ -1,12 +1,14 @@
 import subprocess, os, shutil
+import json
+from django.shortcuts import render
 
 #Ctrl K + C to comment the selected lines
 #Ctrl K + U to uncomment the selected lines
 
 
-# Sistema de seguridad para que en caso de error al crear una red, se vuelva al estado anterior, mediante el backup, eliminando lo que se ha creado
+# Sistema de seguridad para que en caso de error al crear una red, se pueda volver a intentarlo conservando la configuración ya creada
 
-# Sistema de seguridad para que en caso de error al eliminar una red, hayan 3 intentos 
+# Sistema de seguridad para que en caso de error al eliminar una red, se active el backup para volver al estado anterior, para que el usuario pueda volver a intentarlo
 # Si no se consigue, no se elimina la red/fragmento de red de un error de creación, para poder volver a intentarlo
 
 def backup_creation_terraform(username):
@@ -35,13 +37,12 @@ def terraform_apply(username):
         subprocess.run(f"cd terraform/{username} && terraform apply -auto-approve", shell=True, check=True)
         backup_creation_terraform(username)
         return False
-    
-    except subprocess.CalledProcessError as e:
+   
+    except Exception as e:
         print(f"Error al aplicar terraform: {e}")
         backup_restore_terraform(username)
         return True
-
-       
+    
     
 def terraform_apply_output(username):
     try:
@@ -49,41 +50,31 @@ def terraform_apply_output(username):
       backup_creation_terraform(username)
       return False
     
-    except subprocess.CalledProcessError as e:
+    except Exception as e:
         print(f"Error applying terraform: {e}")
-        backup_restore_terraform(username)
         return True
 
 
-def terraform_init_apply_output(username):
-  try:
-    subprocess.run(f"cd terraform/{username} && terraform init -upgrade && terraform apply -auto-approve && terraform output -json > terraform_outputs.json", shell=True, check=True)
-    backup_creation_terraform(username) 
-  except subprocess.CalledProcessError as e:
-    print(f"Error al aplicar terraform: {e}")
-    terraform_init_apply_output(username)
+def terraform_init_apply(username):
+    try:
+      subprocess.run(f"cd terraform/{username} && terraform init -upgrade && terraform apply -auto-approve", shell=True, check=True)
+      backup_creation_terraform(username) 
+      return False
+
+    except Exception as e:
+      print(f"Error al aplicar terraform: {e}")
+      return True
+
 
 def terraform_destroy(username):
-  try:
-    subprocess.run(f"cd terraform/{username} && terraform destroy -auto-approve", check=True, shell=True)
-  except subprocess.CalledProcessError as e:
-    print(f"Error al destruir terraform: {e}")
-    terraform_destroy(username)
+    try:
+      subprocess.run(f"cd terraform/{username} && terraform destroy -auto-approve", check=True, shell=True)
+      return False
 
+    except Exception as e:
+      print(f"Error al destruir terraform: {e}")
+      return True
 
-# def terraform_apply(username):
-#      return 0
-
-# def terraform_apply_output(username):
-#      return 0
-
-# def terraform_init_apply_output(username):
-#      subprocess.run(f"cp terraform/terraform_outputs.json terraform/{username}", shell=True, check=True)
-#      return 0
-
-# def terraform_destroy(username):
-#      return 0
-    
 
 def terraform_template():
  return f"""
@@ -738,3 +729,99 @@ output "instance_gen_ip" {{
   value = openstack_networking_port_v2.{username}_instance_gen_port.all_fixed_ips
 }}
 """
+
+def terraform_import_all(request):
+    types = ["free", "open"]  # Tipos para las barridas 5G
+    username = request.user.username
+    messages = []
+
+    from .views import obtener_direccion_ip
+    ip_gen = obtener_direccion_ip(request.user, "broker_gen_mgmt_ip")
+    ip_open = obtener_direccion_ip(request.user, "broker_open5G_mgmt_ip")
+    ip_free = obtener_direccion_ip(request.user, "broker_free5G_mgmt_ip")
+
+    resources = [
+        # Recursos genéricos
+        {"type": "openstack_networking_network_v2", "name": f"{username}_gen_mgmt_network", "id": get_resource_id("network", f"{username}_gen_mgmt_network", messages)},
+        {"type": "openstack_networking_subnet_v2", "name": f"{username}_gen_mgmt_subnetwork", "id": get_resource_id("subnet", f"{username}_gen_mgmt_subnetwork", messages)},
+        {"type": "openstack_networking_router_v2", "name": f"{username}_gen_mgmt_router", "id": get_resource_id("router", f"{username}_gen_mgmt_router", messages)},
+        {"type": "openstack_networking_floatingip_v2", "name": f"{username}_gen_mgmt_floating_ip", "id": get_resource_id("floatingip", ip_gen, messages, "gen")},
+        {"type": "openstack_compute_instance_v2", "name": f"{username}_gen_broker", "id": get_resource_id("instance", f"{username}_gen_broker", messages)},
+        {"type": "openstack_networking_network_v2", "name": f"{username}_gen_network", "id": get_resource_id("network", f"{username}_gen_network", messages)},
+        {"type": "openstack_networking_subnet_v2", "name": f"{username}_gen_subnetwork", "id": get_resource_id("subnet", f"{username}_gen_subnetwork", messages)},
+        {"type": "openstack_networking_port_v2", "name": f"{username}_instance_mgmt_gen_port", "id": get_resource_id("port", f"{username}_instance_mgmt_gen_port", messages)},
+        {"type": "openstack_networking_port_v2", "name": f"{username}_instance_gen_port", "id": get_resource_id("port", f"{username}_instance_gen_port", messages)},
+        {"type": "openstack_compute_instance_v2", "name": f"{username}_gen_instance", "id": get_resource_id("instance", f"{username}_gen_instance", messages)},
+    ]
+
+    # Recursos 5G con barridas para "free" y "open"
+    for type in types:
+        resources_5G = [
+            {"type": "openstack_networking_network_v2", "name": f"{username}_{type}5G_mgmt_network", "id": get_resource_id("network", f"{username}_{type}5G_mgmt_network", messages)},
+            {"type": "openstack_networking_subnet_v2", "name": f"{username}_{type}5G_mgmt_subnetwork", "id": get_resource_id("subnet", f"{username}_{type}5G_mgmt_subnetwork", messages)},
+            {"type": "openstack_networking_router_v2", "name": f"{username}_{type}5G_mgmt_router", "id": get_resource_id("router", f"{username}_{type}5G_mgmt_router", messages)},
+            {"type": "openstack_networking_floatingip_v2", "name": f"{username}_{type}5G_mgmt_floating_ip", "id": get_resource_id("floatingip", ip_open if type == "open" else ip_free, messages, f"{type}5G")},
+            {"type": "openstack_compute_instance_v2", "name": f"{username}_{type}5G_broker", "id": get_resource_id("instance", f"{username}_{type}5G_broker", messages)},
+            {"type": "openstack_networking_network_v2", "name": f"{username}_{type}5G_network", "id": get_resource_id("network", f"{username}_{type}5G_network", messages)},
+            {"type": "openstack_networking_subnet_v2", "name": f"{username}_UE_AGF_{type}5G_subnetwork", "id": get_resource_id("subnet", f"{username}_UE_AGF_{type}5G_subnetwork", messages)},
+            {"type": "openstack_networking_subnet_v2", "name": f"{username}_AGF_core5G_{type}5G_subnetwork", "id": get_resource_id("subnet", f"{username}_AGF_core5G_{type}5G_subnetwork", messages)},
+            {"type": "openstack_networking_subnet_v2", "name": f"{username}_core5G_server_{type}5G_subnetwork", "id": get_resource_id("subnet", f"{username}_core5G_server_{type}5G_subnetwork", messages)},
+            {"type": "openstack_networking_port_v2", "name": f"{username}_UE_AGF_{type}5G_port", "id": get_resource_id("port", f"{username}_UE_AGF_{type}5G_port", messages)},
+            {"type": "openstack_networking_port_v2", "name": f"{username}_UE_mgmt_{type}5G_port", "id": get_resource_id("port", f"{username}_UE_mgmt_{type}5G_port", messages)},
+            {"type": "openstack_compute_instance_v2", "name": f"{username}_{type}5G_UE", "id": get_resource_id("instance", f"{username}_{type}5G_UE", messages)},
+            {"type": "openstack_networking_port_v2", "name": f"{username}_AGF_UE_{type}5G_port", "id": get_resource_id("port", f"{username}_AGF_UE_{type}5G_port", messages)},
+            {"type": "openstack_networking_port_v2", "name": f"{username}_AGF_core5G_{type}5G_port", "id": get_resource_id("port", f"{username}_AGF_core5G_{type}5G_port", messages)},
+            {"type": "openstack_networking_port_v2", "name": f"{username}_AGF_mgmt_{type}5G_port", "id": get_resource_id("port", f"{username}_AGF_mgmt_{type}5G_port", messages)},
+            {"type": "openstack_compute_instance_v2", "name": f"{username}_{type}5G_AGF", "id": get_resource_id("instance", f"{username}_{type}5G_AGF", messages)},
+            {"type": "openstack_networking_port_v2", "name": f"{username}_core5G_AGF_{type}5G_port", "id": get_resource_id("port", f"{username}_core5G_AGF_{type}5G_port", messages)},
+            {"type": "openstack_networking_port_v2", "name": f"{username}_core5G_mgmt_{type}5G_port", "id": get_resource_id("port", f"{username}_core5G_mgmt_{type}5G_port", messages)},
+            {"type": "openstack_networking_port_v2", "name": f"{username}_core5G_server_{type}5G_port", "id": get_resource_id("port", f"{username}_core5G_server_{type}5G_port", messages)},
+            {"type": "openstack_compute_instance_v2", "name": f"{username}_{type}5G_core5G", "id": get_resource_id("instance", f"{username}_{type}5G_core5G", messages)},
+            {"type": "openstack_networking_port_v2", "name": f"{username}_server_mgmt_{type}5G_port", "id": get_resource_id("port", f"{username}_server_mgmt_{type}5G_port", messages)},
+            {"type": "openstack_networking_port_v2", "name": f"{username}_server_core5G_{type}5G_port", "id": get_resource_id("port", f"{username}_server_core5G_{type}5G_port", messages)},
+            {"type": "openstack_compute_instance_v2", "name": f"{username}_{type}5G_server", "id": get_resource_id("instance", f"{username}_{type}5G_server", messages)},
+        ]
+
+        # Añadir los recursos 5G al listado general
+        resources.extend(resources_5G)
+
+    # Importar todos los recursos
+    for resource in resources:
+        if resource["id"] is not None:
+            try:
+                subprocess.run(f"cd terraform/{username} && terraform import {resource['type']}.{resource['name']} {resource['id']}", shell=True, check=True, stderr=subprocess.DEVNULL)
+                messages.append(f"✅ Importado: {resource['name']} del tipo {resource['type']}  con éxito")
+            except subprocess.CalledProcessError as e:
+                messages.append(f"⚠️ Recurso encontrado, pero ya está en el estado: {resource['name']} del tipo {resource['type']}") 
+    return render(request, "import_result.html", {"messages": messages})
+
+
+
+def get_resource_id(resource_type, resource_name, messages, type=None):
+    try:
+        if resource_type == "network":
+            cmd = f"openstack network show -f json {resource_name}"
+        elif resource_type == "subnet":
+            cmd = f"openstack subnet show -f json {resource_name}"
+        elif resource_type == "router":
+            cmd = f"openstack router show -f json {resource_name}"
+        elif resource_type == "floatingip":
+            cmd = f"openstack floating ip show -f json {resource_name}"
+        elif resource_type == "instance":
+            cmd = f"openstack server show -f json {resource_name}"
+        elif resource_type == "port":
+            cmd = f"openstack port show -f json {resource_name}"
+        else:
+            print(f"Tipo de recurso desconocido: {resource_type}")
+            return None
+
+        result = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=True)
+        data = json.loads(result.stdout)
+        return data.get("id")
+
+    except subprocess.CalledProcessError:
+        if resource_type == "floatingip":
+            messages.append(f"❌ No se encontró la IP flotante de la red {type}")
+        else:
+            messages.append(f"❌ No se encontró el recurso {resource_name} del tipo {resource_type}")
+        return None

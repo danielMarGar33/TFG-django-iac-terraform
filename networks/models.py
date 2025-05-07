@@ -54,6 +54,9 @@ class UserDeployedNetworks(models.Model):
     free5G_deployed = models.BooleanField(default=False)
     open5G_deployed = models.BooleanField(default=False)
     gen_deployed = models.BooleanField(default=False)
+    free5G_error = models.BooleanField(default=False)
+    open5G_error = models.BooleanField(default=False)
+    gen_error = models.BooleanField(default=False)
 
     def __str__(self):
         return f"{self.user.username} - Deployed Networks"
