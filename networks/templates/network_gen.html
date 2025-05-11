@@ -1,15 +1,72 @@
-<h2>Dirección IP Asignada al broker de la red genérica :</h2>
-<ul>
-    {% if broker_gen_mgmt_ip %} <li>Generic Network Broker IP: {{ broker_gen_mgmt_ip }}</li> {% endif %}
-</ul>
+{% extends 'base.html' %}
+{% load static %}
 
-<h2>Dirección IP Asignada a la red genérica :</h2>
-<ul>
-    {% if instance_gen_mgmt_ip %} <li>Instance Management IP: {{ instance_gen_mgmt_ip }}</li> {% endif %}
-    {% if instance_gen_ip %} <li>Instance Network IP: {{ instance_gen_ip }}</li> {% endif %}
-</ul>
+{% block title %}Esquema de la Red Ampliada de Pruebas{{ type }}{% endblock %}
 
-<form action="{% url 'network_list' %}" method="post">
-    {% csrf_token %}
-    <button type="submit">Volver</button>
-</form>
+{% block content %}
+
+<style>
+  .diagram-wrapper {
+    max-width: 600px;              /* Tamaño reducido */
+    margin: 0 auto;                /* Centrado horizontal */
+    position: relative;
+    aspect-ratio: 850 / 550;
+    min-height: 300px;             /* Asegura altura visible para el fondo */
+  }
+
+  .diagram-container {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-image: url("{% static 'Esquema_red_gen.png' %}");
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+    font-size: calc(10px + 0.3vw);
+  }
+
+  .diagram-container .ip {
+    position: absolute;
+    color: black;
+    font-weight: bold;
+    background-color: #f0f0f0;
+    border-radius: 4px;
+    padding: 0 4px;
+    white-space: nowrap;
+  }
+  pre code {
+  font-size: 20px; 
+}
+</style>
+
+<div class="container text-align">
+  <h1 class="mb-4">Red Ampliada de Pruebas</h1>
+
+  <div class="card p-4 mb-5">
+    <h2 class="mb-3">Acceso a la instancia por SSH:</h2>
+    <pre><code>ssh root@<span class="variable-highlight">{{ instance_gen_ip }}</span></code></pre>
+
+    <h2 class="mt-4 mb-3">En caso de cambio de la clave de host:</h2>
+    <pre><code>
+ssh-keygen -R <span class="variable-highlight">{{ instance_gen_ip }}</span>
+ssh root@<span class="variable-highlight">{{ instance_gen_ip }}</span>
+    </code></pre>
+  </div>
+
+  <div class="card p-4 mb-5">
+    <h2>Esquema de la Red Ampliada de Pruebas</h2>
+
+    <div class="diagram-wrapper">
+      <div class="diagram-container">
+        <div class="ip" style="top: 41.5%; left: 51.8%;">{{ instance_gen_ip }}</div>
+      </div>
+    </div>
+
+    <form action="{% url 'network_list' %}" method="post">
+      {% csrf_token %}
+      <button type="submit" class="btn btn-primary btn-lg">Volver</button>
+    </form>
+  </div>
+</div>
+
+{% endblock %}

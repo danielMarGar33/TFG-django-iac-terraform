@@ -30,26 +30,26 @@
 <div class="d-grid gap-2 mb-3">
     <form action="{% url 'delete_net_5G' 'open' 'False' %}" method="post">
         {% csrf_token %}
-        <button type="submit" class="btn btn-danger">Eliminar red Open5G</button>
+        <button type="submit" class="btn btn-danger">Eliminar red Open5GCore</button>
     </form>
     <form action="{% url 'view_net_5G' 'open' %}" method="post">
         {% csrf_token %}
-        <button type="submit" class="btn btn-primary">Ver red Open5G</button>
+        <button type="submit" class="btn btn-primary">Ver red Open5GCore</button>
     </form>
 </div>
 {% elif error_red_5G_open %}
 <div class="alert alert-warning">
-    ⚠️ Hubo un error al crear tu red Open5G. Importe la red y créela o elimínela para solucionarlo.
+    ⚠️ Hubo un problema con tu red Open5GCore. Importe la red y créela o elimínela para solucionarlo.
 </div>
 <div class="d-grid gap-2 mb-3">
     <form action="{% url 'delete_net_5G' 'open' 'False' %}" method="post">
         {% csrf_token %}
-        <button type="submit" class="btn btn-danger">Eliminar red Open5G</button>
+        <button type="submit" class="btn btn-danger">Eliminar red Open5GCore</button>
     </form>
 </div>
 {% else %}
 <div class="alert alert-danger">
-    ❌ No se ha creado tu red Open5G
+    ❌ No se ha creado tu red Open5GCore
 </div>
 {% endif %}
 
@@ -60,56 +60,56 @@
 <div class="d-grid gap-2 mb-3">
     <form action="{% url 'delete_net_5G' 'free' 'False' %}" method="post">
         {% csrf_token %}
-        <button type="submit" class="btn btn-danger">Eliminar red Free5G</button>
+        <button type="submit" class="btn btn-danger">Eliminar red Free5GC</button>
     </form>
     <form action="{% url 'view_net_5G' 'free' %}" method="post">
         {% csrf_token %}
-        <button type="submit" class="btn btn-primary">Ver red Free5G</button>
+        <button type="submit" class="btn btn-primary">Ver red Free5GC</button>
     </form>
 </div>
 {% elif error_red_5G_free %}
 <div class="alert alert-warning">
-    ⚠️ Hubo un error al crear tu red Free5G. Importe la red y créela o elimínela para solucionarlo.
+    ⚠️ Hubo un problema con tu red Free5GC. Importe la red y créela o elimínela para solucionarlo.
 </div>
 <div class="d-grid gap-2 mb-3">
     <form action="{% url 'delete_net_5G' 'free' 'False' %}" method="post">
         {% csrf_token %}
-        <button type="submit" class="btn btn-danger">Eliminar red Free5G</button>
+        <button type="submit" class="btn btn-danger">Eliminar red Free5GC</button>
     </form>
 </div>
 {% else %}
 <div class="alert alert-danger">
-    ❌ No se ha creado tu red Free5G
+    ❌ No se ha creado tu red Free5GC
 </div>
 {% endif %}
 
 {% if creada_red_gen %}
 <div class="alert alert-success">
-    ✅ Red Genérica desplegada
+    ✅ Red Ampliada de Pruebas desplegada
 </div>
 <div class="d-grid gap-2 mb-3">
     <form action="{% url 'delete_net_gen' 'False' %}" method="post">
         {% csrf_token %}
-        <button type="submit" class="btn btn-danger">Eliminar red Genérica</button>
+        <button type="submit" class="btn btn-danger">Eliminar red Ampliada de Pruebas</button>
     </form>
     <form action="{% url 'view_net_gen' %}" method="post">
         {% csrf_token %}
-        <button type="submit" class="btn btn-primary">Ver red Genérica</button>
+        <button type="submit" class="btn btn-primary">Ver red Ampliada de Pruebas</button>
     </form>
 </div>
 {% elif error_red_gen %}
 <div class="alert alert-warning">
-    ⚠️ Hubo un error al crear tu red Genérica. Importe la red y créela o elimínela para solucionarlo.
+    ⚠️ Hubo un problema con tu red Ampliada de Pruebas. Importe la red y créela o elimínela para solucionarlo.
 </div>
 <div class="d-grid gap-2 mb-3">
     <form action="{% url 'delete_net_gen' 'False' %}" method="post">
         {% csrf_token %}
-        <button type="submit" class="btn btn-danger">Eliminar red Genérica</button>
+        <button type="submit" class="btn btn-danger">Eliminar red Ampliada de Pruebas</button>
     </form>
 </div>
 {% else %}
 <div class="alert alert-danger">
-    ❌ No se ha creado tu red Genérica
+    ❌ No se ha creado tu red Ampliada de Pruebas
 </div>
 {% endif %}
 

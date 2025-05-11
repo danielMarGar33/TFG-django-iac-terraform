@@ -541,35 +541,11 @@ output "server_{type}5G_core5G_ip" {{
 
 
 
-def append_section_gen(username, subred_gen, subred_mgmt, gateway, password):
+def append_section_gen(username, subred_gen, gateway, password):
    return f"""
 
-# Configuracion de red de mgmt
-# Creacion de la red interna
-resource "openstack_networking_network_v2" "{username}_gen_mgmt_network" {{
-  name  = "{username}_gen_mgmt_network"
-  mtu   = 1400  
-  timeouts {{
-    create = "10m"
-    delete = "10m"
-  }}
-}}
-
-
-# Creacion de la subred de mgmt
-resource "openstack_networking_subnet_v2" "{username}_gen_mgmt_subnetwork" {{
-  name       = "{username}_gen_mgmt_subnetwork"
-  network_id = openstack_networking_network_v2.{username}_gen_mgmt_network.id
-  cidr       = "{subred_mgmt}"
-  gateway_ip = "{gateway}"
-  timeouts {{
-    create = "10m"
-    delete = "10m"
-  }}
-}}
-
 # Configuracion del router para conectarse a las redes de gestion
-resource "openstack_networking_router_v2" "{username}_gen_mgmt_router" {{
+resource "openstack_networking_router_v2" "{username}_gen_router" {{
   name                = "{username}_gen_mgmt_router"
   external_network_id = "30157725-23a0-4b3e-bd6a-ebfc46c39cac" # ID de la red externa
   timeouts {{
@@ -579,9 +555,9 @@ resource "openstack_networking_router_v2" "{username}_gen_mgmt_router" {{
 }}
 
 # Conexion del router a la subred de mgmt 
-resource "openstack_networking_router_interface_v2" "{username}_gen_mgmt_router_interface" {{
-  router_id = openstack_networking_router_v2.{username}_gen_mgmt_router.id
-  subnet_id = openstack_networking_subnet_v2.{username}_gen_mgmt_subnetwork.id
+resource "openstack_networking_router_interface_v2" "{username}_gen_router_interface" {{
+  router_id = openstack_networking_router_v2.{username}_gen_router.id
+  subnet_id = openstack_networking_subnet_v2.{username}_gen_subnetwork.id
   timeouts {{
     create = "10m"
     delete = "10m"
@@ -589,7 +565,7 @@ resource "openstack_networking_router_interface_v2" "{username}_gen_mgmt_router_
 }}
 
 # Crear IP flotante para el broker 
-resource "openstack_networking_floatingip_v2" "{username}_gen_mgmt_floating_ip" {{
+resource "openstack_networking_floatingip_v2" "{username}_gen_floating_ip" {{
   pool = "extnet" # Asigna una IP en el rango de direcciones que tenemos en la red externa
   timeouts {{
     create = "10m"
@@ -598,53 +574,12 @@ resource "openstack_networking_floatingip_v2" "{username}_gen_mgmt_floating_ip" 
 }}
 
 # Asociar la IP flotante a la instancia
-resource "openstack_networking_floatingip_associate_v2" "{username}_gen_mgmt_floating_ip_assoc" {{
-  floating_ip = openstack_networking_floatingip_v2.{username}_gen_mgmt_floating_ip.address
-  port_id = openstack_compute_instance_v2.{username}_gen_broker.network[0].port
+resource "openstack_networking_floatingip_associate_v2" "{username}_gen_floating_ip_assoc" {{
+  floating_ip = openstack_networking_floatingip_v2.{username}_gen_floating_ip.address
+  port_id = openstack_compute_instance_v2.{username}_gen_instance.network[0].port
 }}
 
-
-# Puerto para broker en la subred de mgmt
-resource "openstack_networking_port_v2" "{username}_gen_broker_port" {{
-  name       = "{username}_gen_broker_port"
-  network_id = openstack_networking_network_v2.{username}_gen_mgmt_network.id
-  fixed_ip {{
-    subnet_id = openstack_networking_subnet_v2.{username}_gen_mgmt_subnetwork.id
-  }}
-  timeouts {{
-    create = "10m"
-    delete = "10m"
-  }}
-}}
-
-# Crear instancia del broker con dos interfaces de red
-resource "openstack_compute_instance_v2" "{username}_gen_broker" {{
-  name      = "{username}_gen_broker"
-  image_id  = "db02fc5c-cacc-42be-8e5f-90f2db65cf7c"
-  flavor_id = "101"
-  user_data = <<-EOF
-              #!/bin/bash             
-              # Establecer la contrasena para el nuevo usuario (puedes cambiarla)
-              echo "root:{password}" | chpasswd
-
-              # Asegurarse de que el usuario pueda acceder a traves de SSH
-              echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
-
-              # Reiniciar el servicio SSH para que los cambios tomen efecto
-              systemctl restart sshd
-              EOF
-
-network {{
-    port = openstack_networking_port_v2.{username}_gen_broker_port.id
-  }}
-timeouts {{
-    create = "10m"
-    delete = "10m"
-  }}
-
-}}
-
-# Creacion de la red generica
+# Creacion de la red Ampliada de Pruebas
 resource "openstack_networking_network_v2" "{username}_gen_network" {{
   name = "{username}_gen_network"
   timeouts {{
@@ -653,11 +588,12 @@ resource "openstack_networking_network_v2" "{username}_gen_network" {{
   }}
 }}
 
-# Creacion de la subred generica
+# Creacion de la subred Ampliada de Pruebas
 resource "openstack_networking_subnet_v2" "{username}_gen_subnetwork" {{
   name       = "{username}_gen_subnetwork"
   network_id = openstack_networking_network_v2.{username}_gen_network.id
   cidr       = "{subred_gen}"
+  gateway_ip = "{gateway}"
   timeouts {{
     create = "10m"
     delete = "10m"
@@ -665,20 +601,7 @@ resource "openstack_networking_subnet_v2" "{username}_gen_subnetwork" {{
 }}
 
 
-# Puerto para la instancia en la subred de mgmt
-resource "openstack_networking_port_v2" "{username}_instance_mgmt_gen_port" {{
-  name       = "{username}_instance_mgmt_gen_port"
-  network_id = openstack_networking_network_v2.{username}_gen_mgmt_network.id
-  fixed_ip {{
-    subnet_id = openstack_networking_subnet_v2.{username}_gen_mgmt_subnetwork.id
-  }}
-  timeouts {{
-    create = "10m"
-    delete = "10m"
-  }}
-}}
-
-# Puerto para la instancia en la subred generica
+# Puerto para la instancia en la subred Ampliada de Pruebas
 resource "openstack_networking_port_v2" "{username}_instance_gen_port" {{
   name       = "{username}_instance_gen_port"
   network_id = openstack_networking_network_v2.{username}_gen_network.id
@@ -691,7 +614,7 @@ resource "openstack_networking_port_v2" "{username}_instance_gen_port" {{
   }}
 }}
 
-# Crear instancia generica
+# Crear instancia Ampliada de Pruebas
 resource "openstack_compute_instance_v2" "{username}_gen_instance" {{
   name      = "{username}_gen_instance"
   image_id  = "db02fc5c-cacc-42be-8e5f-90f2db65cf7c"
@@ -710,26 +633,19 @@ resource "openstack_compute_instance_v2" "{username}_gen_instance" {{
   network {{
     port = openstack_networking_port_v2.{username}_instance_gen_port.id
   }}
-  network {{
-    port = openstack_networking_port_v2.{username}_instance_mgmt_gen_port.id
-  }}
   timeouts {{
     create = "10m"
     delete = "10m"
   }}
 }}
 
-output "instance_mgmt_ip" {{
-  value = openstack_networking_port_v2.{username}_instance_mgmt_gen_port.all_fixed_ips
-}}
-output "broker_gen_mgmt_ip" {{
-  value = openstack_networking_floatingip_v2.{username}_gen_mgmt_floating_ip.address
-}}
+
 output "instance_gen_ip" {{
   value = openstack_networking_port_v2.{username}_instance_gen_port.all_fixed_ips
 }}
 """
 
+## IMPORTANTE AÑADIR LAS VARIABLES DE ENTORNO ##
 def terraform_import_all(request):
     types = ["free", "open"]  # Tipos para las barridas 5G
     username = request.user.username
@@ -742,14 +658,10 @@ def terraform_import_all(request):
 
     resources = [
         # Recursos genéricos
-        {"type": "openstack_networking_network_v2", "name": f"{username}_gen_mgmt_network", "id": get_resource_id("network", f"{username}_gen_mgmt_network", messages)},
-        {"type": "openstack_networking_subnet_v2", "name": f"{username}_gen_mgmt_subnetwork", "id": get_resource_id("subnet", f"{username}_gen_mgmt_subnetwork", messages)},
-        {"type": "openstack_networking_router_v2", "name": f"{username}_gen_mgmt_router", "id": get_resource_id("router", f"{username}_gen_mgmt_router", messages)},
-        {"type": "openstack_networking_floatingip_v2", "name": f"{username}_gen_mgmt_floating_ip", "id": get_resource_id("floatingip", ip_gen, messages, "gen")},
-        {"type": "openstack_compute_instance_v2", "name": f"{username}_gen_broker", "id": get_resource_id("instance", f"{username}_gen_broker", messages)},
+        {"type": "openstack_networking_router_v2", "name": f"{username}_gen_router", "id": get_resource_id("router", f"{username}_gen_mgmt_router", messages)},
+        {"type": "openstack_networking_floatingip_v2", "name": f"{username}_gen_floating_ip", "id": get_resource_id("floatingip", ip_gen, messages, "gen")},
         {"type": "openstack_networking_network_v2", "name": f"{username}_gen_network", "id": get_resource_id("network", f"{username}_gen_network", messages)},
         {"type": "openstack_networking_subnet_v2", "name": f"{username}_gen_subnetwork", "id": get_resource_id("subnet", f"{username}_gen_subnetwork", messages)},
-        {"type": "openstack_networking_port_v2", "name": f"{username}_instance_mgmt_gen_port", "id": get_resource_id("port", f"{username}_instance_mgmt_gen_port", messages)},
         {"type": "openstack_networking_port_v2", "name": f"{username}_instance_gen_port", "id": get_resource_id("port", f"{username}_instance_gen_port", messages)},
         {"type": "openstack_compute_instance_v2", "name": f"{username}_gen_instance", "id": get_resource_id("instance", f"{username}_gen_instance", messages)},
     ]
@@ -791,8 +703,10 @@ def terraform_import_all(request):
             try:
                 subprocess.run(f"cd terraform/{username} && terraform import {resource['type']}.{resource['name']} {resource['id']}", shell=True, check=True, stderr=subprocess.DEVNULL)
                 messages.append(f"✅ Importado: {resource['name']} del tipo {resource['type']}  con éxito")
+                print(f"✅ Importado: {resource['name']} del tipo {resource['type']}  con éxito")
             except subprocess.CalledProcessError as e:
                 messages.append(f"⚠️ Recurso encontrado, pero ya está en el estado: {resource['name']} del tipo {resource['type']}") 
+                print(f"⚠️ Recurso encontrado, pero ya está en el estado: {resource['name']} del tipo {resource['type']}")
     return render(request, "import_result.html", {"messages": messages})
 
 
@@ -822,6 +736,8 @@ def get_resource_id(resource_type, resource_name, messages, type=None):
     except subprocess.CalledProcessError:
         if resource_type == "floatingip":
             messages.append(f"❌ No se encontró la IP flotante de la red {type}")
+            print(f"❌ No se encontró la IP flotante de la red {type}")
         else:
             messages.append(f"❌ No se encontró el recurso {resource_name} del tipo {resource_type}")
+            print(f"❌ No se encontró el recurso {resource_name} del tipo {resource_type}")
         return None

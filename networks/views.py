@@ -4,9 +4,12 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth import get_user
 from django.urls import reverse
+from django.conf import settings
 from .models import UserNetwork, UserSubnet, SSH_password, UserIP, UserDeployedNetworks
 from .forms import NetworkForm
 from .terraform import append_section_5G, append_section_gen, terraform_template, terraform_apply, terraform_apply_output, terraform_init_apply
+from Crypto.Cipher import AES
+import base64
 import os, re, ipaddress, json
 
 
@@ -28,6 +31,21 @@ CORE_FREE_IMAGE = "db02fc5c-cacc-42be-8e5f-90f2db65cf7c"
 CORE_OPEN_IMAGE = "db02fc5c-cacc-42be-8e5f-90f2db65cf7c"
 ##################################################
 
+### FUNCIONES DE ENCRIPTACION Y DESENCRIPTACION ###
+def encriptar_contraseña(contraseña):
+    """ Encripta la contraseña """
+    key = settings.ENCRYPTION_KEY.encode('utf-8')
+    cipher = AES.new(key, AES.MODE_EAX)
+    ciphertext, tag = cipher.encrypt_and_digest(contraseña.encode('utf-8'))
+    return base64.b64encode(cipher.nonce + tag + ciphertext).decode('utf-8')
+
+def desencriptar_contraseña(contraseña):
+    """ Desencripta la contraseña """
+    contraseña = base64.b64decode(contraseña.encode('utf-8'))
+    key = settings.ENCRYPTION_KEY.encode('utf-8')
+    nonce, tag, ciphertext = contraseña[:16], contraseña[16:32], contraseña[32:]
+    cipher = AES.new(key, AES.MODE_EAX, nonce=nonce)
+    return cipher.decrypt_and_verify(ciphertext, tag).decode('utf-8')
 
 ### FUNCIONES PARA EXTRAER, GUARDAR Y ELIMINAR DATOS EN BBDD ###
 
@@ -91,7 +109,7 @@ def obtener_red(usuario, nombre):
     
 def asignar_contraseña_ssh(usuario, contraseña, type):
     """ Asigna una contraseña de SSH a un usuario en la BD """
-    SSH_password.objects.update_or_create(user=usuario, defaults={"ssh_password": contraseña}, type=type)
+    SSH_password.objects.update_or_create(user=usuario, defaults={"ssh_password": encriptar_contraseña(contraseña)}, type=type)
 
 def eliminar_contraseña_ssh(usuario, type):
     """ Elimina la contraseña de SSH de un usuario en la BD """
@@ -319,22 +337,19 @@ def create_network(request):
                 if not flag_error_gen:
 
                     asignar_contraseña_ssh(usuario, request.POST.get('ssh_password'), "gen")
-                    assigned_nets = list(UserNetwork.objects.values_list('network_cidr', flat=True))
-                    red_unica = obtener_subred_unica(BASE_CIDR, assigned_nets, NET_MASK)
-                    asignar_red_usuario(usuario, red_unica, "user_gen_mgmt_network")
 
                     assigned_nets = list(UserNetwork.objects.values_list('network_cidr', flat=True))
                     red_unica = obtener_subred_unica(BASE_CIDR, assigned_nets, NET_MASK)
                     asignar_red_usuario(usuario, red_unica, "user_gen_network")
 
                     asignar_subred(usuario, "subred_gen", obtener_subred_unica(obtener_red(usuario, "user_gen_network"), obtener_subredes(usuario), SUBNET_MASK))
-                    asignar_subred(usuario, "subred_gen_mgmt", obtener_subred_unica(obtener_red(usuario, "user_gen_mgmt_network"), obtener_subredes(usuario), SUBNET_MASK))
+
                     resultado = apply_terraform_gen(usuario, usuario.username) 
                 else:
                     resultado = terraform_apply_output(usuario.username)
 
                 if resultado:
-                    mensaje = "Error al crear la red genérica"
+                    mensaje = "Error al crear la red Ampliada de Pruebas"
                     asignar_flag_red(usuario, "gen_error")
                     messages.error(request, mensaje)
                     return redirect(reverse('network_list'))
@@ -342,20 +357,15 @@ def create_network(request):
                 else: 
                     asignar_flag_red(usuario, "gen")
                     eliminar_flag_red(usuario, "gen_error")
-                    messages.success(request, "Red genérica creada correctamente")
+                    messages.success(request, "Red Ampliada de Pruebas creada correctamente")
 
                     # Cargar la salida de Terraform
                     with open(f"terraform/{usuario.username}/terraform_outputs.json") as f:
                             data = json.load(f)
 
-                    instance_mgmt_ip = data["instance_mgmt_ip"]["value"][0]
-                    asignar_direccion_ip(usuario, instance_mgmt_ip, "instance_mgmt_ip")
-
                     instance_gen_ip = data["instance_gen_ip"]["value"][0]
                     asignar_direccion_ip(usuario, instance_gen_ip, "instance_gen_ip")
 
-                    broker_mgmt_ip = data["broker_gen_mgmt_ip"]["value"]
-                    asignar_direccion_ip(usuario, broker_mgmt_ip, "broker_gen_mgmt_ip")
 
                     return redirect(reverse('network_list'))
 
@@ -384,9 +394,8 @@ def apply_terraform_gen(usuario, username):
 
     append_section = append_section_gen(username, 
                                        obtener_subred_por_nombre(usuario, f"subred_gen"), 
-                                       obtener_subred_por_nombre(usuario, f"subred_gen_mgmt"), 
-                                       get_gateway(obtener_subred_por_nombre(usuario, f"subred_gen_mgmt")),
-                                       SSH_password.objects.get(user=usuario, type="gen").ssh_password
+                                       get_gateway(obtener_subred_por_nombre(usuario, f"subred_gen")),
+                                       desencriptar_contraseña(SSH_password.objects.get(user=usuario, type="gen").ssh_password)
                                        )
     with open(main_tf_path, "a") as f:
         f.write(append_section)
@@ -410,7 +419,7 @@ def apply_terraform_5G(usuario, username, core_image, type):
                                        get_gateway(obtener_subred_por_nombre(usuario, f"subred_{type}5G_mgmt")),
                                        core_image,
                                        type,
-                                       SSH_password.objects.get(user=usuario, type=type).ssh_password
+                                       desencriptar_contraseña(SSH_password.objects.get(user=usuario, type=type).ssh_password)
                                        )
     with open(main_tf_path, "a") as f:
         f.write(append_section)
@@ -445,7 +454,7 @@ def delete_net_5G(request, type, flag):
                                        get_gateway(obtener_subred_por_nombre(usuario, f"subred_{type}5G_mgmt")),
                                        core_image,
                                        type,
-                                       SSH_password.objects.get(user=usuario, type=type).ssh_password
+                                       desencriptar_contraseña(SSH_password.objects.get(user=usuario, type=type).ssh_password) 
                                        )
 
     old_content = re.sub(re.escape(append_section), "", content)
@@ -516,7 +525,7 @@ def delete_net_gen(request, flag):
                                        obtener_subred_por_nombre(usuario, f"subred_gen"), 
                                        obtener_subred_por_nombre(usuario, f"subred_gen_mgmt"), 
                                        get_gateway(obtener_subred_por_nombre(usuario, f"subred_gen_mgmt")),
-                                       SSH_password.objects.get(user=usuario, type="gen").ssh_password
+                                       desencriptar_contraseña(SSH_password.objects.get(user=usuario, type="gen").ssh_password) 
                                        )
     
     old_content = re.sub(re.escape(append_section), "", content)
@@ -533,25 +542,19 @@ def delete_net_gen(request, flag):
        eliminar_contraseña_ssh(usuario, "gen")
 
        #Eliminar las redes
-       eliminar_red_usuario(usuario, "user_gen_mgmt_network")
        eliminar_red_usuario(usuario, "user_gen_network")
-
-       #Eliminar las subredes
        eliminar_subred(usuario, "subred_gen")
-       eliminar_subred(usuario, "subred_gen_mgmt")
 
-       # Eliminar las IPs
-       eliminar_direccion_ip(usuario, "instance_mgmt_ip")
-       eliminar_direccion_ip(usuario, "broker_gen_mgmt_ip")
+       # Eliminar la IPs
        eliminar_direccion_ip(usuario, "instance_gen_ip")
     
-       mensaje = "Red genérica eliminada correctamente"
+       mensaje = "Red Ampliada de Pruebas eliminada correctamente"
        messages.success(request, mensaje)
        eliminar_flag_red(usuario, "gen_error")
        return redirect('network_list') 
     
     else :
-       mensaje = f"Error al eliminar la red genérica, se ha restaurado la configuración anterior."
+       mensaje = f"Error al eliminar la red Ampliada de Pruebas, se ha restaurado la configuración anterior."
        messages.error(request, mensaje)
        asignar_flag_red(usuario, "gen_error")
        return redirect('network_list') 
@@ -595,15 +598,9 @@ def view_net_5G(request, type):
 @login_required
 def view_net_gen(request):
 
-    instance_mgmt_ip = obtener_direccion_ip(request.user, "instance_mgmt_ip")
-    broker_mgmt_ip = obtener_direccion_ip(request.user, "broker_gen_mgmt_ip")
     instance_gen_ip = obtener_direccion_ip(request.user, "instance_gen_ip")
-    
     context = {
-        'instance_gen_mgmt_ip': instance_mgmt_ip,
-        'broker_gen_mgmt_ip': broker_mgmt_ip,
         'instance_gen_ip': instance_gen_ip,
     }
-
     return render(request, 'network_gen.html', context)
 

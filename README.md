@@ -3,7 +3,9 @@ Interfaz Web para interactuar con un cliente Terraform, y instalar infraestructu
 
 Antes de iniciar, es necesario crear un archivo .env con la configuración para la cli de openstack. Necesario para la importar la configuración actual en caso de error
 
---> .env
+--> requirements.txt
+
+--> Añadir estas variables de entorno al sistema
 OS_USERNAME=<Rellenar aquí>
 OS_PROJECT_NAME=<Rellenar aquí>
 OS_PASSWORD=<Rellenar aquí>
@@ -12,6 +14,7 @@ OS_REGION_NAME=RegionOne
 OS_USER_DOMAIN_NAME=Default
 OS_PROJECT_DOMAIN_NAME=Default
 OS_IDENTITY_API_VERSION=3 
+ENCRYPTION_KEY==<Rellenar aquí>
 
 
---> ejecutar   . .\load-env.ps1                                  
+Puede ejecutar   . .\load-env.ps1  o utilizar load.env.sh para cargarlas en Linux                            
