@@ -1,3 +1,4 @@
+import subprocess
 from django.shortcuts import render, redirect
 from django.contrib.auth import login, logout, get_user
 from django.contrib import messages
@@ -28,6 +29,11 @@ def custom_login(request):
         form = AuthenticationForm(request, data=request.POST)
         if form.is_valid():
             user = form.get_user()
+           
+            if request.user.is_authenticated:
+                # Cierra la sesión actual (sea quien sea el usuario)
+                logout(request)
+
             login(request, user)
             return redirect('network_list')
     else:

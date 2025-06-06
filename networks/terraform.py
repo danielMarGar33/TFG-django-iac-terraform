@@ -1,6 +1,7 @@
 import subprocess, os, shutil
 import json
 from django.shortcuts import render
+from django.conf import settings
 
 #Ctrl K + C to comment the selected lines
 #Ctrl K + U to uncomment the selected lines
@@ -34,7 +35,7 @@ def backup_restore_terraform(username):
 
 def terraform_apply(username):
     try:
-        subprocess.run(f"cd terraform/{username} && terraform apply -auto-approve", shell=True, check=True)
+        subprocess.run(f"cd terraform/{username} && terraform init -upgrade && terraform apply -auto-approve -parallelism=3", shell=True, check=True)
         backup_creation_terraform(username)
         return False
    
@@ -46,7 +47,7 @@ def terraform_apply(username):
     
 def terraform_apply_output(username):
     try:
-      subprocess.run(f"cd terraform/{username} && terraform apply -auto-approve && terraform output -json > terraform_outputs.json", shell=True, check=True)
+      subprocess.run(f"cd terraform/{username} && terraform init -upgrade && terraform apply -auto-approve -parallelism=3 && terraform output -json > terraform_outputs.json", shell=True, check=True)
       backup_creation_terraform(username)
       return False
     
@@ -68,7 +69,7 @@ def terraform_init_apply(username):
 
 def terraform_destroy(username):
     try:
-      subprocess.run(f"cd terraform/{username} && terraform destroy -auto-approve", check=True, shell=True)
+      subprocess.run(f"cd terraform/{username} && terraform init -upgrade && terraform destroy -auto-approve -parallelism=3", check=True, shell=True)
       return False
 
     except Exception as e:
@@ -90,13 +91,13 @@ terraform {{
 }}
 
 
-# Configurar el provider de openstack
 provider "openstack" {{
-  user_name   = "terraform"
-  tenant_name = "terraform"
-  password    = "!Terraform_rsti_2025"
-  auth_url    = "http://138.4.21.62:5000/v3/"
-  region      = "RegionOne"
+  user_name   = "{settings.OS_USERNAME}"
+  tenant_name = "{settings.OS_PROJECT_NAME}"
+  password    = "{settings.OS_PASSWORD}"
+  auth_url    = "{settings.OS_AUTH_URL}"
+  region      = "{settings.OS_REGION_NAME}"
+  max_retries = 5
 }}
 """
 
@@ -111,8 +112,8 @@ resource "openstack_networking_network_v2" "{username}_{type}5G_mgmt_network" {{
   name  = "{username}_{type}5G_mgmt_network"
   mtu   = 1400  
   timeouts {{
-    create = "10m"
-    delete = "10m"
+    create = "1m"
+    delete = "1m"
   }}
 }}
 
@@ -124,8 +125,8 @@ resource "openstack_networking_subnet_v2" "{username}_{type}5G_mgmt_subnetwork" 
   cidr       = "{subred_mgmt}"
   gateway_ip = "{gateway}"
   timeouts {{
-    create = "10m"
-    delete = "10m"
+    create = "1m"
+    delete = "1m"
   }}
 }}
 
@@ -134,8 +135,8 @@ resource "openstack_networking_router_v2" "{username}_{type}5G_mgmt_router" {{
   name                = "{username}_{type}5G_mgmt_router"
   external_network_id = "30157725-23a0-4b3e-bd6a-ebfc46c39cac" # ID de la red externa
   timeouts {{
-    create = "10m"
-    delete = "10m"
+    create = "1m"
+    delete = "1m"
   }}
 }}
 
@@ -144,8 +145,8 @@ resource "openstack_networking_router_interface_v2" "{username}_{type}5G_mgmt_ro
   router_id = openstack_networking_router_v2.{username}_{type}5G_mgmt_router.id
   subnet_id = openstack_networking_subnet_v2.{username}_{type}5G_mgmt_subnetwork.id
   timeouts {{
-    create = "10m"
-    delete = "10m"
+    create = "1m"
+    delete = "1m"
   }}
 }}
 
@@ -153,8 +154,8 @@ resource "openstack_networking_router_interface_v2" "{username}_{type}5G_mgmt_ro
 resource "openstack_networking_floatingip_v2" "{username}_{type}5G_mgmt_floating_ip" {{
   pool = "extnet" # Asigna una IP en el rango de direcciones que tenemos en la red externa
   timeouts {{
-    create = "10m"
-    delete = "10m"
+    create = "1m"
+    delete = "1m"
   }}
 }}
 
@@ -173,8 +174,8 @@ resource "openstack_networking_port_v2" "{username}_{type}5G_broker_port" {{
     subnet_id = openstack_networking_subnet_v2.{username}_{type}5G_mgmt_subnetwork.id
   }}
   timeouts {{
-    create = "10m"
-    delete = "10m"
+    create = "1m"
+    delete = "1m"
   }}
 }}
 
@@ -199,8 +200,8 @@ network {{
     port = openstack_networking_port_v2.{username}_{type}5G_broker_port.id
   }}
 timeouts {{
-    create = "10m"
-    delete = "10m"
+    create = "1m"
+    delete = "1m"
   }}
 
 }}
@@ -211,8 +212,8 @@ timeouts {{
 resource "openstack_networking_network_v2" "{username}_{type}5G_network" {{
   name = "{username}_{type}5G_network"
   timeouts {{
-    create = "10m"
-    delete = "10m"
+    create = "1m"
+    delete = "1m"
   }}
 }}
 
@@ -223,8 +224,8 @@ resource "openstack_networking_subnet_v2" "{username}_UE_AGF_{type}5G_subnetwork
   network_id = openstack_networking_network_v2.{username}_{type}5G_network.id
   cidr       = "{subred_open_UE_AGF}"
   timeouts {{
-    create = "10m"
-    delete = "10m"
+    create = "1m"
+    delete = "1m"
   }}
 
 }}
@@ -235,8 +236,8 @@ resource "openstack_networking_subnet_v2" "{username}_AGF_core5G_{type}5G_subnet
   network_id = openstack_networking_network_v2.{username}_{type}5G_network.id
   cidr       = "{subred_open_AGF_core5G}"
   timeouts {{
-    create = "10m"
-    delete = "10m"
+    create = "1m"
+    delete = "1m"
   }}
 }}
 
@@ -246,8 +247,8 @@ resource "openstack_networking_subnet_v2" "{username}_core5G_server_{type}5G_sub
   network_id = openstack_networking_network_v2.{username}_{type}5G_network.id
   cidr       = "{subred_open_core5G_server}"
   timeouts {{
-    create = "10m"
-    delete = "10m"
+    create = "1m"
+    delete = "1m"
   }}
 }}
 
@@ -260,8 +261,8 @@ resource "openstack_networking_port_v2" "{username}_UE_AGF_{type}5G_port" {{
     subnet_id = openstack_networking_subnet_v2.{username}_UE_AGF_{type}5G_subnetwork.id
   }}
   timeouts {{
-    create = "10m"
-    delete = "10m"
+    create = "1m"
+    delete = "1m"
   }}
 }}
 
@@ -273,8 +274,8 @@ resource "openstack_networking_port_v2" "{username}_UE_mgmt_{type}5G_port" {{
     subnet_id = openstack_networking_subnet_v2.{username}_{type}5G_mgmt_subnetwork.id
   }}
   timeouts {{
-    create = "10m"
-    delete = "10m"
+    create = "1m"
+    delete = "1m"
   }}
 }}
 
@@ -301,8 +302,8 @@ resource "openstack_compute_instance_v2" "{username}_{type}5G_UE" {{
     port = openstack_networking_port_v2.{username}_UE_mgmt_{type}5G_port.id
   }}
   timeouts {{
-    create = "10m"
-    delete = "10m"
+    create = "1m"
+    delete = "1m"
   }}
 }}
 
@@ -316,8 +317,8 @@ resource "openstack_networking_port_v2" "{username}_AGF_UE_{type}5G_port" {{
     subnet_id = openstack_networking_subnet_v2.{username}_UE_AGF_{type}5G_subnetwork.id
   }}
   timeouts {{
-    create = "10m"
-    delete = "10m"
+    create = "1m"
+    delete = "1m"
   }}
 }}
 
@@ -329,8 +330,8 @@ resource "openstack_networking_port_v2" "{username}_AGF_core5G_{type}5G_port" {{
     subnet_id = openstack_networking_subnet_v2.{username}_AGF_core5G_{type}5G_subnetwork.id
   }}
   timeouts {{
-    create = "10m"
-    delete = "10m"
+    create = "1m"
+    delete = "1m"
   }}
 }}
 
@@ -342,8 +343,8 @@ resource "openstack_networking_port_v2" "{username}_AGF_mgmt_{type}5G_port" {{
     subnet_id = openstack_networking_subnet_v2.{username}_{type}5G_mgmt_subnetwork.id
   }}
   timeouts {{
-    create = "10m"
-    delete = "10m"
+    create = "1m"
+    delete = "1m"
   }}
 }}
 
@@ -373,8 +374,8 @@ resource "openstack_compute_instance_v2" "{username}_{type}5G_AGF" {{
     port = openstack_networking_port_v2.{username}_AGF_mgmt_{type}5G_port.id
   }}
   timeouts {{
-    create = "10m"
-    delete = "10m"
+    create = "1m"
+    delete = "1m"
   }}
 }}
 
@@ -386,8 +387,8 @@ resource "openstack_networking_port_v2" "{username}_core5G_AGF_{type}5G_port" {{
     subnet_id = openstack_networking_subnet_v2.{username}_AGF_core5G_{type}5G_subnetwork.id
   }}
   timeouts {{
-    create = "10m"
-    delete = "10m"
+    create = "1m"
+    delete = "1m"
   }}
 }}
 
@@ -399,8 +400,8 @@ resource "openstack_networking_port_v2" "{username}_core5G_mgmt_{type}5G_port" {
     subnet_id = openstack_networking_subnet_v2.{username}_{type}5G_mgmt_subnetwork.id
   }}
   timeouts {{
-    create = "10m"
-    delete = "10m"
+    create = "1m"
+    delete = "1m"
   }}
 }}
 
@@ -412,8 +413,8 @@ resource "openstack_networking_port_v2" "{username}_core5G_server_{type}5G_port"
     subnet_id = openstack_networking_subnet_v2.{username}_core5G_server_{type}5G_subnetwork.id
   }}
   timeouts {{
-    create = "10m"
-    delete = "10m"
+    create = "1m"
+    delete = "1m"
   }}
 }}
 
@@ -443,8 +444,8 @@ resource "openstack_compute_instance_v2" "{username}_{type}5G_core5G" {{
     port = openstack_networking_port_v2.{username}_core5G_mgmt_{type}5G_port.id
   }}
   timeouts {{
-    create = "10m"
-    delete = "10m"
+    create = "1m"
+    delete = "1m"
   }}
 }}
 
@@ -456,8 +457,8 @@ resource "openstack_networking_port_v2" "{username}_server_mgmt_{type}5G_port" {
     subnet_id = openstack_networking_subnet_v2.{username}_{type}5G_mgmt_subnetwork.id
   }}
   timeouts {{
-    create = "10m"
-    delete = "10m"
+    create = "1m"
+    delete = "1m"
   }}
 }}
 
@@ -469,8 +470,8 @@ resource "openstack_networking_port_v2" "{username}_server_core5G_{type}5G_port"
     subnet_id = openstack_networking_subnet_v2.{username}_core5G_server_{type}5G_subnetwork.id
   }}
   timeouts {{
-    create = "10m"
-    delete = "10m"
+    create = "1m"
+    delete = "1m"
   }}
 }}
 
@@ -497,8 +498,8 @@ resource "openstack_compute_instance_v2" "{username}_{type}5G_server" {{
     port = openstack_networking_port_v2.{username}_server_mgmt_{type}5G_port.id
   }}
   timeouts {{
-    create = "10m"
-    delete = "10m"
+    create = "1m"
+    delete = "1m"
   }}
 }}
 
@@ -541,26 +542,26 @@ output "server_{type}5G_core5G_ip" {{
 
 
 
-def append_section_gen(username, subred_gen, gateway, password):
+def append_section_gen(username, gen_mgmt_subnetwork, gen_subnetwork, gateway, password):
    return f"""
 
 # Configuracion del router para conectarse a las redes de gestion
-resource "openstack_networking_router_v2" "{username}_gen_router" {{
+resource "openstack_networking_router_v2" "{username}_gen_mgmt_router" {{
   name                = "{username}_gen_mgmt_router"
   external_network_id = "30157725-23a0-4b3e-bd6a-ebfc46c39cac" # ID de la red externa
   timeouts {{
-    create = "10m"
-    delete = "10m"
+    create = "1m"
+    delete = "1m"
   }}
 }}
 
 # Conexion del router a la subred de mgmt 
-resource "openstack_networking_router_interface_v2" "{username}_gen_router_interface" {{
-  router_id = openstack_networking_router_v2.{username}_gen_router.id
-  subnet_id = openstack_networking_subnet_v2.{username}_gen_subnetwork.id
+resource "openstack_networking_router_interface_v2" "{username}_gen_mgmt_router_interface" {{
+  router_id = openstack_networking_router_v2.{username}_gen_mgmt_router.id
+  subnet_id = openstack_networking_subnet_v2.{username}_gen_mgmt_subnetwork.id
   timeouts {{
-    create = "10m"
-    delete = "10m"
+    create = "1m"
+    delete = "1m"
   }}
 }}
 
@@ -568,23 +569,23 @@ resource "openstack_networking_router_interface_v2" "{username}_gen_router_inter
 resource "openstack_networking_floatingip_v2" "{username}_gen_floating_ip" {{
   pool = "extnet" # Asigna una IP en el rango de direcciones que tenemos en la red externa
   timeouts {{
-    create = "10m"
-    delete = "10m"
+    create = "1m"
+    delete = "1m"
   }}
 }}
 
 # Asociar la IP flotante a la instancia
 resource "openstack_networking_floatingip_associate_v2" "{username}_gen_floating_ip_assoc" {{
   floating_ip = openstack_networking_floatingip_v2.{username}_gen_floating_ip.address
-  port_id = openstack_compute_instance_v2.{username}_gen_instance.network[0].port
+  port_id = openstack_compute_instance_v2.{username}_gen_broker.network[0].port
 }}
 
 # Creacion de la red Ampliada de Pruebas
 resource "openstack_networking_network_v2" "{username}_gen_network" {{
   name = "{username}_gen_network"
   timeouts {{
-    create = "10m"
-    delete = "10m"
+    create = "1m"
+    delete = "1m"
   }}
 }}
 
@@ -592,31 +593,51 @@ resource "openstack_networking_network_v2" "{username}_gen_network" {{
 resource "openstack_networking_subnet_v2" "{username}_gen_subnetwork" {{
   name       = "{username}_gen_subnetwork"
   network_id = openstack_networking_network_v2.{username}_gen_network.id
-  cidr       = "{subred_gen}"
+  cidr       = "{gen_subnetwork}"
+  timeouts {{
+    create = "1m"
+    delete = "1m"
+  }}
+}}
+
+#Creación de la red de gestion para la red Ampliada de Pruebas
+resource "openstack_networking_network_v2" "{username}_gen_mgmt_network" {{
+  name = "{username}_gen_mgmt_network"
+  timeouts {{ 
+    create = "1m"
+    delete = "1m"  
+  }}
+}}
+
+# Creacion de la subred de gestion para la red Ampliada de Pruebas
+resource "openstack_networking_subnet_v2" "{username}_gen_mgmt_subnetwork" {{
+  name       = "{username}_gen_mgmt_subnetwork" 
+  network_id = openstack_networking_network_v2.{username}_gen_mgmt_network.id
+  cidr       = "{gen_mgmt_subnetwork}"
   gateway_ip = "{gateway}"
   timeouts {{
-    create = "10m"
-    delete = "10m"
+    create = "1m"
+    delete = "1m"
   }}
 }}
 
 
-# Puerto para la instancia en la subred Ampliada de Pruebas
-resource "openstack_networking_port_v2" "{username}_instance_gen_port" {{
-  name       = "{username}_instance_gen_port"
-  network_id = openstack_networking_network_v2.{username}_gen_network.id
+# Puerto para el broker en la subred Ampliada de Pruebas
+resource "openstack_networking_port_v2" "{username}_gen_broker_port" {{
+  name       = "{username}_gen_broker_port"
+  network_id = openstack_networking_network_v2.{username}_gen_mgmt_network.id
   fixed_ip {{
-    subnet_id = openstack_networking_subnet_v2.{username}_gen_subnetwork.id
+    subnet_id = openstack_networking_subnet_v2.{username}_gen_mgmt_subnetwork.id
   }}
   timeouts {{
-    create = "10m"
-    delete = "10m"
+    create = "1m"
+    delete = "1m"
   }}
 }}
 
-# Crear instancia Ampliada de Pruebas
-resource "openstack_compute_instance_v2" "{username}_gen_instance" {{
-  name      = "{username}_gen_instance"
+# Crear el broker de la red Ampliada de Pruebas
+resource "openstack_compute_instance_v2" "{username}_gen_broker" {{
+  name      = "{username}_gen_broker"
   image_id  = "db02fc5c-cacc-42be-8e5f-90f2db65cf7c"
   flavor_id = "101"
   user_data = <<-EOF
@@ -631,87 +652,205 @@ resource "openstack_compute_instance_v2" "{username}_gen_instance" {{
             systemctl restart sshd
             EOF
   network {{
-    port = openstack_networking_port_v2.{username}_instance_gen_port.id
+    port = openstack_networking_port_v2.{username}_gen_broker_port.id
   }}
   timeouts {{
-    create = "10m"
-    delete = "10m"
+    create = "1m"
+    delete = "1m"
   }}
 }}
 
+# Puerto para el controller en la subred Ampliada de Pruebas
+resource "openstack_networking_port_v2" "{username}_gen_controller_port" {{
+  name       = "{username}_gen_controller_port"
+  network_id = openstack_networking_network_v2.{username}_gen_network.id
+  fixed_ip {{
+    subnet_id = openstack_networking_subnet_v2.{username}_gen_subnetwork.id
+  }}
+  timeouts {{
+    create = "1m"
+    delete = "1m"
+  }}
+}}
 
-output "instance_gen_ip" {{
-  value = openstack_networking_port_v2.{username}_instance_gen_port.all_fixed_ips
+# Puerto para el controller en la subred de gestion de la red Ampliada de Pruebas
+resource "openstack_networking_port_v2" "{username}_gen_broker_controller_port" {{
+  name       = "{username}_gen_broker_controller_port"
+  network_id = openstack_networking_network_v2.{username}_gen_mgmt_network.id
+  fixed_ip {{
+    subnet_id = openstack_networking_subnet_v2.{username}_gen_mgmt_subnetwork.id
+  }}
+  timeouts {{
+    create = "1m"
+    delete = "1m"
+  }}
+}}
+
+# Crear el controller de la red Ampliada de Pruebas
+resource "openstack_compute_instance_v2" "{username}_gen_controller" {{
+  name      = "{username}_gen_controller"
+  image_id  = "db02fc5c-cacc-42be-8e5f-90f2db65cf7c"
+  flavor_id = "101"
+  user_data = <<-EOF
+            #!/bin/bash             
+            # Establecer la contrasena para el nuevo usuario (puedes cambiarla)
+            echo "root:{password}" | chpasswd
+
+            # Asegurarse de que el usuario pueda acceder a traves de SSH
+            echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
+
+            # Reiniciar el servicio SSH para que los cambios tomen efecto
+            systemctl restart sshd
+            EOF
+  network {{
+    port = openstack_networking_port_v2.{username}_gen_broker_controller_port.id
+  }}
+  network {{
+    port = openstack_networking_port_v2.{username}_gen_controller_port.id
+  }}
+  timeouts {{
+    create = "1m"
+    delete = "1m"
+  }}
+}}
+
+# Puerto para el worker en la subred Ampliada de Pruebas
+resource "openstack_networking_port_v2" "{username}_gen_worker_port" {{
+  name       = "{username}_gen_worker_port"
+  network_id = openstack_networking_network_v2.{username}_gen_network.id
+  fixed_ip {{
+    subnet_id = openstack_networking_subnet_v2.{username}_gen_subnetwork.id
+  }}
+  timeouts {{
+    create = "1m"
+    delete = "1m"
+  }}
+}}
+
+# Puerto para el worker en la subred de gestion de la red Ampliada de Pruebas
+resource "openstack_networking_port_v2" "{username}_gen_broker_worker_port" {{
+  name       = "{username}_gen_broker_worker_port"
+  network_id = openstack_networking_network_v2.{username}_gen_mgmt_network.id
+  fixed_ip {{
+    subnet_id = openstack_networking_subnet_v2.{username}_gen_mgmt_subnetwork.id
+  }}
+  timeouts {{
+    create = "1m"
+    delete = "1m"
+  }}
+}}
+
+# Crear el worker de la red Ampliada de Pruebas
+resource "openstack_compute_instance_v2" "{username}_gen_worker" {{
+  name      = "{username}_gen_worker"
+  image_id  = "db02fc5c-cacc-42be-8e5f-90f2db65cf7c"
+  flavor_id = "101"
+  user_data = <<-EOF
+            #!/bin/bash             
+            # Establecer la contrasena para el nuevo usuario (puedes cambiarla)
+            echo "root:{password}" | chpasswd
+
+            # Asegurarse de que el usuario pueda acceder a traves de SSH
+            echo "PasswordAuthentication yes" >> /etc/ssh/sshd_config
+
+            # Reiniciar el servicio SSH para que los cambios tomen efecto
+            systemctl restart sshd
+            EOF
+  network {{
+    port = openstack_networking_port_v2.{username}_gen_broker_worker_port.id
+  }}
+  network {{
+    port = openstack_networking_port_v2.{username}_gen_worker_port.id
+  }}
+  timeouts {{
+    create = "1m"
+    delete = "1m"
+  }}
+}}
+
+output "gen_broker_ip" {{
+  value = openstack_networking_floatingip_v2.{username}_gen_floating_ip.address 
+}}
+
+output "gen_controller_ip" {{
+  value = openstack_networking_port_v2.{username}_gen_broker_controller_port.all_fixed_ips
+}}
+
+output "gen_worker_ip" {{
+  value = openstack_networking_port_v2.{username}_gen_broker_worker_port.all_fixed_ips
 }}
 """
 
-## IMPORTANTE AÑADIR LAS VARIABLES DE ENTORNO ##
-def terraform_import_all(request):
-    types = ["free", "open"]  # Tipos para las barridas 5G
+
+def terraform_check_existing_resources(request):
+    types = ["free", "open"]
     username = request.user.username
     messages = []
 
     from .views import obtener_direccion_ip
-    ip_gen = obtener_direccion_ip(request.user, "broker_gen_mgmt_ip")
+    ip_gen = obtener_direccion_ip(request.user, "gen_broker_ip")
     ip_open = obtener_direccion_ip(request.user, "broker_open5G_mgmt_ip")
     ip_free = obtener_direccion_ip(request.user, "broker_free5G_mgmt_ip")
 
     resources = [
-        # Recursos genéricos
-        {"type": "openstack_networking_router_v2", "name": f"{username}_gen_router", "id": get_resource_id("router", f"{username}_gen_mgmt_router", messages)},
-        {"type": "openstack_networking_floatingip_v2", "name": f"{username}_gen_floating_ip", "id": get_resource_id("floatingip", ip_gen, messages, "gen")},
-        {"type": "openstack_networking_network_v2", "name": f"{username}_gen_network", "id": get_resource_id("network", f"{username}_gen_network", messages)},
-        {"type": "openstack_networking_subnet_v2", "name": f"{username}_gen_subnetwork", "id": get_resource_id("subnet", f"{username}_gen_subnetwork", messages)},
-        {"type": "openstack_networking_port_v2", "name": f"{username}_instance_gen_port", "id": get_resource_id("port", f"{username}_instance_gen_port", messages)},
-        {"type": "openstack_compute_instance_v2", "name": f"{username}_gen_instance", "id": get_resource_id("instance", f"{username}_gen_instance", messages)},
+        {"type": "openstack_networking_router_v2", "name": f"{username}_gen_mgmt_router", "id": get_resource_id("router", f"{username}_gen_mgmt_router")},
+        {"type": "openstack_networking_floatingip_v2", "name": f"{username}_gen_floating_ip", "id": get_resource_id("floatingip", ip_gen)},
+        {"type": "openstack_networking_network_v2", "name": f"{username}_gen_network", "id": get_resource_id("network", f"{username}_gen_network")},
+        {"type": "openstack_networking_subnet_v2", "name": f"{username}_gen_subnetwork", "id": get_resource_id("subnet", f"{username}_gen_subnetwork")},
+        {"type": "openstack_networking_network_v2", "name": f"{username}_gen_mgmt_network", "id": get_resource_id("network", f"{username}_gen_mgmt_network")},
+        {"type": "openstack_networking_subnet_v2", "name": f"{username}_gen_mgmt_subnetwork", "id": get_resource_id("subnet", f"{username}_gen_mgmt_subnetwork")},
+        {"type": "openstack_networking_port_v2", "name": f"{username}_gen_broker_port", "id": get_resource_id("port", f"{username}_gen_broker_port")},
+        {"type": "openstack_compute_instance_v2", "name": f"{username}_gen_broker", "id": get_resource_id("instance", f"{username}_gen_broker")},
+        {"type": "openstack_networking_port_v2", "name": f"{username}_gen_broker_controller_port", "id": get_resource_id("port", f"{username}_gen_broker_controller_port")},
+        {"type": "openstack_networking_port_v2", "name": f"{username}_gen_controller_port", "id": get_resource_id("port", f"{username}_gen_controller_port")},
+        {"type": "openstack_compute_instance_v2", "name": f"{username}_gen_controller", "id": get_resource_id("instance", f"{username}_gen_controller")},
+        {"type": "openstack_networking_port_v2", "name": f"{username}_gen_broker_worker_port", "id": get_resource_id("port", f"{username}_gen_broker_worker_port")},
+        {"type": "openstack_networking_port_v2", "name": f"{username}_gen_worker_port", "id": get_resource_id("port", f"{username}_gen_worker_port")},
+        {"type": "openstack_compute_instance_v2", "name": f"{username}_gen_worker", "id": get_resource_id("instance", f"{username}_gen_worker")},
     ]
 
-    # Recursos 5G con barridas para "free" y "open"
     for type in types:
+        ip = ip_open if type == "open" else ip_free
         resources_5G = [
-            {"type": "openstack_networking_network_v2", "name": f"{username}_{type}5G_mgmt_network", "id": get_resource_id("network", f"{username}_{type}5G_mgmt_network", messages)},
-            {"type": "openstack_networking_subnet_v2", "name": f"{username}_{type}5G_mgmt_subnetwork", "id": get_resource_id("subnet", f"{username}_{type}5G_mgmt_subnetwork", messages)},
-            {"type": "openstack_networking_router_v2", "name": f"{username}_{type}5G_mgmt_router", "id": get_resource_id("router", f"{username}_{type}5G_mgmt_router", messages)},
-            {"type": "openstack_networking_floatingip_v2", "name": f"{username}_{type}5G_mgmt_floating_ip", "id": get_resource_id("floatingip", ip_open if type == "open" else ip_free, messages, f"{type}5G")},
-            {"type": "openstack_compute_instance_v2", "name": f"{username}_{type}5G_broker", "id": get_resource_id("instance", f"{username}_{type}5G_broker", messages)},
-            {"type": "openstack_networking_network_v2", "name": f"{username}_{type}5G_network", "id": get_resource_id("network", f"{username}_{type}5G_network", messages)},
-            {"type": "openstack_networking_subnet_v2", "name": f"{username}_UE_AGF_{type}5G_subnetwork", "id": get_resource_id("subnet", f"{username}_UE_AGF_{type}5G_subnetwork", messages)},
-            {"type": "openstack_networking_subnet_v2", "name": f"{username}_AGF_core5G_{type}5G_subnetwork", "id": get_resource_id("subnet", f"{username}_AGF_core5G_{type}5G_subnetwork", messages)},
-            {"type": "openstack_networking_subnet_v2", "name": f"{username}_core5G_server_{type}5G_subnetwork", "id": get_resource_id("subnet", f"{username}_core5G_server_{type}5G_subnetwork", messages)},
-            {"type": "openstack_networking_port_v2", "name": f"{username}_UE_AGF_{type}5G_port", "id": get_resource_id("port", f"{username}_UE_AGF_{type}5G_port", messages)},
-            {"type": "openstack_networking_port_v2", "name": f"{username}_UE_mgmt_{type}5G_port", "id": get_resource_id("port", f"{username}_UE_mgmt_{type}5G_port", messages)},
-            {"type": "openstack_compute_instance_v2", "name": f"{username}_{type}5G_UE", "id": get_resource_id("instance", f"{username}_{type}5G_UE", messages)},
-            {"type": "openstack_networking_port_v2", "name": f"{username}_AGF_UE_{type}5G_port", "id": get_resource_id("port", f"{username}_AGF_UE_{type}5G_port", messages)},
-            {"type": "openstack_networking_port_v2", "name": f"{username}_AGF_core5G_{type}5G_port", "id": get_resource_id("port", f"{username}_AGF_core5G_{type}5G_port", messages)},
-            {"type": "openstack_networking_port_v2", "name": f"{username}_AGF_mgmt_{type}5G_port", "id": get_resource_id("port", f"{username}_AGF_mgmt_{type}5G_port", messages)},
-            {"type": "openstack_compute_instance_v2", "name": f"{username}_{type}5G_AGF", "id": get_resource_id("instance", f"{username}_{type}5G_AGF", messages)},
-            {"type": "openstack_networking_port_v2", "name": f"{username}_core5G_AGF_{type}5G_port", "id": get_resource_id("port", f"{username}_core5G_AGF_{type}5G_port", messages)},
-            {"type": "openstack_networking_port_v2", "name": f"{username}_core5G_mgmt_{type}5G_port", "id": get_resource_id("port", f"{username}_core5G_mgmt_{type}5G_port", messages)},
-            {"type": "openstack_networking_port_v2", "name": f"{username}_core5G_server_{type}5G_port", "id": get_resource_id("port", f"{username}_core5G_server_{type}5G_port", messages)},
-            {"type": "openstack_compute_instance_v2", "name": f"{username}_{type}5G_core5G", "id": get_resource_id("instance", f"{username}_{type}5G_core5G", messages)},
-            {"type": "openstack_networking_port_v2", "name": f"{username}_server_mgmt_{type}5G_port", "id": get_resource_id("port", f"{username}_server_mgmt_{type}5G_port", messages)},
-            {"type": "openstack_networking_port_v2", "name": f"{username}_server_core5G_{type}5G_port", "id": get_resource_id("port", f"{username}_server_core5G_{type}5G_port", messages)},
-            {"type": "openstack_compute_instance_v2", "name": f"{username}_{type}5G_server", "id": get_resource_id("instance", f"{username}_{type}5G_server", messages)},
+            {"type": "openstack_networking_network_v2", "name": f"{username}_{type}5G_mgmt_network", "id": get_resource_id("network", f"{username}_{type}5G_mgmt_network")},
+            {"type": "openstack_networking_subnet_v2", "name": f"{username}_{type}5G_mgmt_subnetwork", "id": get_resource_id("subnet", f"{username}_{type}5G_mgmt_subnetwork")},
+            {"type": "openstack_networking_router_v2", "name": f"{username}_{type}5G_mgmt_router", "id": get_resource_id("router", f"{username}_{type}5G_mgmt_router")},
+            {"type": "openstack_networking_floatingip_v2", "name": f"{username}_{type}5G_mgmt_floating_ip", "id": get_resource_id("floatingip", ip)},
+            {"type": "openstack_compute_instance_v2", "name": f"{username}_{type}5G_broker", "id": get_resource_id("instance", f"{username}_{type}5G_broker")},
+            {"type": "openstack_networking_network_v2", "name": f"{username}_{type}5G_network", "id": get_resource_id("network", f"{username}_{type}5G_network")},
+            {"type": "openstack_networking_subnet_v2", "name": f"{username}_UE_AGF_{type}5G_subnetwork", "id": get_resource_id("subnet", f"{username}_UE_AGF_{type}5G_subnetwork")},
+            {"type": "openstack_networking_subnet_v2", "name": f"{username}_AGF_core5G_{type}5G_subnetwork", "id": get_resource_id("subnet", f"{username}_AGF_core5G_{type}5G_subnetwork")},
+            {"type": "openstack_networking_subnet_v2", "name": f"{username}_core5G_server_{type}5G_subnetwork", "id": get_resource_id("subnet", f"{username}_core5G_server_{type}5G_subnetwork")},
+            {"type": "openstack_networking_port_v2", "name": f"{username}_UE_AGF_{type}5G_port", "id": get_resource_id("port", f"{username}_UE_AGF_{type}5G_port")},
+            {"type": "openstack_networking_port_v2", "name": f"{username}_UE_mgmt_{type}5G_port", "id": get_resource_id("port", f"{username}_UE_mgmt_{type}5G_port")},
+            {"type": "openstack_compute_instance_v2", "name": f"{username}_{type}5G_UE", "id": get_resource_id("instance", f"{username}_{type}5G_UE")},
+            {"type": "openstack_networking_port_v2", "name": f"{username}_AGF_UE_{type}5G_port", "id": get_resource_id("port", f"{username}_AGF_UE_{type}5G_port")},
+            {"type": "openstack_networking_port_v2", "name": f"{username}_AGF_core5G_{type}5G_port", "id": get_resource_id("port", f"{username}_AGF_core5G_{type}5G_port")},
+            {"type": "openstack_networking_port_v2", "name": f"{username}_AGF_mgmt_{type}5G_port", "id": get_resource_id("port", f"{username}_AGF_mgmt_{type}5G_port")},
+            {"type": "openstack_compute_instance_v2", "name": f"{username}_{type}5G_AGF", "id": get_resource_id("instance", f"{username}_{type}5G_AGF")},
+            {"type": "openstack_networking_port_v2", "name": f"{username}_core5G_AGF_{type}5G_port", "id": get_resource_id("port", f"{username}_core5G_AGF_{type}5G_port")},
+            {"type": "openstack_networking_port_v2", "name": f"{username}_core5G_mgmt_{type}5G_port", "id": get_resource_id("port", f"{username}_core5G_mgmt_{type}5G_port")},
+            {"type": "openstack_networking_port_v2", "name": f"{username}_core5G_server_{type}5G_port", "id": get_resource_id("port", f"{username}_core5G_server_{type}5G_port")},
+            {"type": "openstack_compute_instance_v2", "name": f"{username}_{type}5G_core5G", "id": get_resource_id("instance", f"{username}_{type}5G_core5G")},
+            {"type": "openstack_networking_port_v2", "name": f"{username}_server_mgmt_{type}5G_port", "id": get_resource_id("port", f"{username}_server_mgmt_{type}5G_port")},
+            {"type": "openstack_networking_port_v2", "name": f"{username}_server_core5G_{type}5G_port", "id": get_resource_id("port", f"{username}_server_core5G_{type}5G_port")},
+            {"type": "openstack_compute_instance_v2", "name": f"{username}_{type}5G_server", "id": get_resource_id("instance", f"{username}_{type}5G_server")},
         ]
-
-        # Añadir los recursos 5G al listado general
         resources.extend(resources_5G)
 
-    # Importar todos los recursos
+    # Agregar mensajes
     for resource in resources:
-        if resource["id"] is not None:
-            try:
-                subprocess.run(f"cd terraform/{username} && terraform import {resource['type']}.{resource['name']} {resource['id']}", shell=True, check=True, stderr=subprocess.DEVNULL)
-                messages.append(f"✅ Importado: {resource['name']} del tipo {resource['type']}  con éxito")
-                print(f"✅ Importado: {resource['name']} del tipo {resource['type']}  con éxito")
-            except subprocess.CalledProcessError as e:
-                messages.append(f"⚠️ Recurso encontrado, pero ya está en el estado: {resource['name']} del tipo {resource['type']}") 
-                print(f"⚠️ Recurso encontrado, pero ya está en el estado: {resource['name']} del tipo {resource['type']}")
-    return render(request, "import_result.html", {"messages": messages})
+        if resource["id"]:
+            messages.append(f"✅ Encontrado en OpenStack: {resource['name']} ({resource['type']}) → ID: {resource['id']}")
+        elif resource["type"] == "openstack_networking_floatingip_v2":
+            messages.append(f"❌ No se encontró la IP flotante: {resource['name']}")
+        else:
+            messages.append(f"❌ No encontrado: {resource['name']} ({resource['type']})")
+
+    return render(request, "check_result.html", {"messages": messages})
 
 
-
-def get_resource_id(resource_type, resource_name, messages, type=None):
+def get_resource_id(resource_type, resource_name):
     try:
         if resource_type == "network":
             cmd = f"openstack network show -f json {resource_name}"
@@ -726,7 +865,6 @@ def get_resource_id(resource_type, resource_name, messages, type=None):
         elif resource_type == "port":
             cmd = f"openstack port show -f json {resource_name}"
         else:
-            print(f"Tipo de recurso desconocido: {resource_type}")
             return None
 
         result = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=True)
@@ -734,10 +872,4 @@ def get_resource_id(resource_type, resource_name, messages, type=None):
         return data.get("id")
 
     except subprocess.CalledProcessError:
-        if resource_type == "floatingip":
-            messages.append(f"❌ No se encontró la IP flotante de la red {type}")
-            print(f"❌ No se encontró la IP flotante de la red {type}")
-        else:
-            messages.append(f"❌ No se encontró el recurso {resource_name} del tipo {resource_type}")
-            print(f"❌ No se encontró el recurso {resource_name} del tipo {resource_type}")
         return None

@@ -2,14 +2,14 @@ from django.urls import path
 from django.contrib import admin
 from networks.views import create_network, network_list, delete_net_5G, delete_net_gen, view_net_5G, view_net_gen
 from accounts.views import register, custom_login, custom_logout, delete_user
-from networks.terraform import terraform_import_all
+from networks.terraform import terraform_check_existing_resources
 from accounts.views import error_page
 
 handler404 = error_page
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('import_networks/', terraform_import_all, name='import_networks'),
+    path('check_networks/', terraform_check_existing_resources, name='check_networks'),
     path('create-network/', create_network, name='create_network'),
     path('network-list/', network_list, name='network_list'),
     path('delete_net_5G/<str:type>/<str:flag>/', delete_net_5G, name='delete_net_5G'),

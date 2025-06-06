@@ -7,12 +7,12 @@
 
 <style>
   .diagram-wrapper {
-    max-width: 600px;              /* Tamaño reducido */
-    margin: 0 auto;                /* Centrado horizontal */
-    position: relative;
-    aspect-ratio: 850 / 550;
-    min-height: 300px;             /* Asegura altura visible para el fondo */
-  }
+  max-width: 1000px;             /* Aumentado para hacerlo más ancho */
+  margin: 0 auto;
+  position: relative;
+  aspect-ratio: 850 / 550;
+  min-height: 500px;             /* También aumentamos la altura mínima */
+}
 
   .diagram-container {
     position: absolute;
@@ -43,13 +43,13 @@
   <h1 class="mb-4">Red Ampliada de Pruebas</h1>
 
   <div class="card p-4 mb-5">
-    <h2 class="mb-3">Acceso a la instancia por SSH:</h2>
-    <pre><code>ssh root@<span class="variable-highlight">{{ instance_gen_ip }}</span></code></pre>
+    <h2 class="mb-3">Acceso al broker por SSH:</h2>
+    <pre><code>ssh root@<span class="variable-highlight">{{ gen_broker_ip }}</span></code></pre>
 
     <h2 class="mt-4 mb-3">En caso de cambio de la clave de host:</h2>
     <pre><code>
-ssh-keygen -R <span class="variable-highlight">{{ instance_gen_ip }}</span>
-ssh root@<span class="variable-highlight">{{ instance_gen_ip }}</span>
+ssh-keygen -R <span class="variable-highlight">{{ gen_broker_ip }}</span>
+ssh root@<span class="variable-highlight">{{ gen_broker_ip }}</span>
     </code></pre>
   </div>
 
@@ -58,7 +58,9 @@ ssh root@<span class="variable-highlight">{{ instance_gen_ip }}</span>
 
     <div class="diagram-wrapper">
       <div class="diagram-container">
-        <div class="ip" style="top: 41.5%; left: 51.8%;">{{ instance_gen_ip }}</div>
+        <div class="ip" style="top: 18.5%; left: 54.8%;">{{ gen_broker_ip }}</div>
+        <div class="ip" style="top: 62.5%; left: 19.8%;">{{ gen_controller_ip }}</div>
+        <div class="ip" style="top: 62.5%; left: 70.2%;">{{ gen_worker_ip }}</div>
       </div>
     </div>
 

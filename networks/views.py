@@ -2,6 +2,8 @@ from django.shortcuts import render, redirect
 from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.views.decorators.http import require_http_methods
+from django.http import HttpResponseNotAllowed
 from django.contrib.auth import get_user
 from django.urls import reverse
 from django.conf import settings
@@ -240,6 +242,7 @@ def network_list(request):
     return render(request, 'network_list.html', context)
 
 @login_required
+@require_http_methods(["POST", "PUT"])
 def create_network(request):
     usuario = get_user(request)
 
@@ -251,14 +254,9 @@ def create_network(request):
             Is5G_open = form.cleaned_data['opciones'] == 'opcion5G_open'
             Is5G_free = form.cleaned_data['opciones'] == 'opcion5G_free'
             IsGen = form.cleaned_data['opciones'] == 'opcionGen'
-            flag_error_open = obtener_flag_red(usuario, "open_error")
-            flag_error_free = obtener_flag_red(usuario, "free_error")
-            flag_error_gen = obtener_flag_red(usuario, "gen_error")
 
 
             if Is5G_open or Is5G_free:
-
-                if (Is5G_free and not flag_error_free) or (Is5G_open and not flag_error_open):
 
                     asignar_contraseña_ssh(usuario, request.POST.get('ssh_password'), "open") if Is5G_open else asignar_contraseña_ssh(usuario, request.POST.get('ssh_password'), "free")
                     type = "open" if Is5G_open else "free"
@@ -266,108 +264,110 @@ def create_network(request):
 
                     assigned_nets = list(UserNetwork.objects.values_list('network_cidr', flat=True))
                     red_unica = obtener_subred_unica(BASE_CIDR, assigned_nets, NET_MASK)
-                    asignar_red_usuario(usuario, red_unica, f"user_{type}5G_mgmt_network")
+                    asignar_red_usuario(usuario, red_unica, f"{type}5G_mgmt_network")
 
                     assigned_nets = list(UserNetwork.objects.values_list('network_cidr', flat=True))
                     red_unica = obtener_subred_unica(BASE_CIDR, assigned_nets, NET_MASK)
-                    asignar_red_usuario(usuario, red_unica, f"user_{type}5G_network")
+                    asignar_red_usuario(usuario, red_unica, f"{type}5G_network")
 
-                    asignar_subred(usuario, f"subred_{type}5G_mgmt", obtener_subred_unica(obtener_red(usuario, f"user_{type}5G_mgmt_network"), obtener_subredes(usuario), SUBNET_MASK))
-                    asignar_subred(usuario, f"subred_{type}5G_UE_AGF", obtener_subred_unica(obtener_red(usuario, f"user_{type}5G_network"), obtener_subredes(usuario), SUBNET_MASK))
-                    asignar_subred(usuario, f"subred_{type}5G_AGF_core5G", obtener_subred_unica(obtener_red(usuario, f"user_{type}5G_network"), obtener_subredes(usuario), SUBNET_MASK))
-                    asignar_subred(usuario, f"subred_{type}5G_core5G_server", obtener_subred_unica(obtener_red(usuario, f"user_{type}5G_network"), obtener_subredes(usuario), SUBNET_MASK))
+                    asignar_subred(usuario, f"{type}5G_mgmt_subnetwork", obtener_subred_unica(obtener_red(usuario, f"{type}5G_mgmt_network"), obtener_subredes(usuario), SUBNET_MASK))
+                    asignar_subred(usuario, f"{type}5G_UE_AGF_subnetwork", obtener_subred_unica(obtener_red(usuario, f"{type}5G_network"), obtener_subredes(usuario), SUBNET_MASK))
+                    asignar_subred(usuario, f"{type}5G_AGF_core5G_subnetwork", obtener_subred_unica(obtener_red(usuario, f"{type}5G_network"), obtener_subredes(usuario), SUBNET_MASK))
+                    asignar_subred(usuario, f"{type}5G_core5G_server_subnetwork", obtener_subred_unica(obtener_red(usuario, f"{type}5G_network"), obtener_subredes(usuario), SUBNET_MASK))
+
                     resultado = apply_terraform_5G(usuario, usuario.username, core, type)
-                else:
-                    resultado = terraform_apply_output(usuario.username)
-
-                if resultado:
-                    mensaje = f"Error al crear la red {type}5G"
-                    asignar_flag_red(usuario, f"{type}_error")
-                    messages.error(request, mensaje)
-                    return redirect(reverse('network_list'))
-                else:
                     asignar_flag_red(usuario, type)
-                    eliminar_flag_red(usuario, f"{type}_error")
-                    messages.success(request, f"Red {type}5G creada correctamente")
-                    
-                    # Cargar la salida de Terraform
-                    with open(f"terraform/{usuario.username}/terraform_outputs.json") as f:
-                            data = json.load(f)
 
-                    # Obtener la IPs de los servidores
-                    UE_mgmt_ip = data[f"UE_{type}5G_mgmt_ip"]["value"][0]
-                    asignar_direccion_ip(usuario, UE_mgmt_ip, f"UE_{type}5G_mgmt_ip")
+                    if resultado:
+                        mensaje = f"Error al crear la red {type}5G"
+                        asignar_flag_red(usuario, f"{type}_error")
+                        messages.error(request, mensaje)
+                        return redirect(reverse('network_list'))
+                    else:
+                        eliminar_flag_red(usuario, f"{type}_error")
+                        messages.success(request, f"Red {type}5G creada correctamente")
+                        
+                        # Cargar la salida de Terraform
+                        with open(f"terraform/{usuario.username}/terraform_outputs.json") as f:
+                                data = json.load(f)
 
-                    AGF_mgmt_ip = data[f"AGF_{type}5G_mgmt_ip"]["value"][0]
-                    asignar_direccion_ip(usuario, AGF_mgmt_ip, f"AGF_{type}5G_mgmt_ip")
+                        # Obtener la IPs de los servidores
+                        UE_mgmt_ip = data[f"UE_{type}5G_mgmt_ip"]["value"][0]
+                        asignar_direccion_ip(usuario, UE_mgmt_ip, f"UE_{type}5G_mgmt_ip")
 
-                    core5G_mgmt_ip = data[f"core5G_{type}5G_mgmt_ip"]["value"][0]
-                    asignar_direccion_ip(usuario, core5G_mgmt_ip, f"core5G_{type}5G_mgmt_ip")
+                        AGF_mgmt_ip = data[f"AGF_{type}5G_mgmt_ip"]["value"][0]
+                        asignar_direccion_ip(usuario, AGF_mgmt_ip, f"AGF_{type}5G_mgmt_ip")
 
-                    server_mgmt_ip = data[f"server_{type}5G_mgmt_ip"]["value"][0]
-                    asignar_direccion_ip(usuario, server_mgmt_ip, f"server_{type}5G_mgmt_ip")
+                        core5G_mgmt_ip = data[f"core5G_{type}5G_mgmt_ip"]["value"][0]
+                        asignar_direccion_ip(usuario, core5G_mgmt_ip, f"core5G_{type}5G_mgmt_ip")
 
-                    broker_mgmt_ip = data[f"broker_{type}5G_mgmt_ip"]["value"]
-                    asignar_direccion_ip(usuario, broker_mgmt_ip, f"broker_{type}5G_mgmt_ip")
+                        server_mgmt_ip = data[f"server_{type}5G_mgmt_ip"]["value"][0]
+                        asignar_direccion_ip(usuario, server_mgmt_ip, f"server_{type}5G_mgmt_ip")
 
-                    UE_UE_ip = data[f"UE_{type}5G_UE_ip"]["value"][0]
-                    asignar_direccion_ip(usuario, UE_UE_ip, f"UE_{type}5G_UE_ip")
+                        broker_mgmt_ip = data[f"broker_{type}5G_mgmt_ip"]["value"]
+                        asignar_direccion_ip(usuario, broker_mgmt_ip, f"broker_{type}5G_mgmt_ip")
 
-                    AGF_UE_ip = data[f"AGF_{type}5G_UE_ip"]["value"][0]
-                    asignar_direccion_ip(usuario, AGF_UE_ip, f"AGF_{type}5G_UE_ip")
+                        UE_UE_ip = data[f"UE_{type}5G_UE_ip"]["value"][0]
+                        asignar_direccion_ip(usuario, UE_UE_ip, f"UE_{type}5G_UE_ip")
 
-                    AGF_core5G_ip = data[f"AGF_{type}5G_core5G_ip"]["value"][0]
-                    asignar_direccion_ip(usuario, AGF_core5G_ip, f"AGF_{type}5G_core5G_ip")
+                        AGF_UE_ip = data[f"AGF_{type}5G_UE_ip"]["value"][0]
+                        asignar_direccion_ip(usuario, AGF_UE_ip, f"AGF_{type}5G_UE_ip")
 
-                    core5G_AGF_ip = data[f"core5G_{type}5G_AGF_ip"]["value"][0]
-                    asignar_direccion_ip(usuario, core5G_AGF_ip, f"core5G_{type}5G_AGF_ip")
+                        AGF_core5G_ip = data[f"AGF_{type}5G_core5G_ip"]["value"][0]
+                        asignar_direccion_ip(usuario, AGF_core5G_ip, f"AGF_{type}5G_core5G_ip")
 
-                    core5G_server_ip = data[f"core5G_{type}5G_server_ip"]["value"][0]
-                    asignar_direccion_ip(usuario, core5G_server_ip, f"core5G_{type}5G_server_ip")
+                        core5G_AGF_ip = data[f"core5G_{type}5G_AGF_ip"]["value"][0]
+                        asignar_direccion_ip(usuario, core5G_AGF_ip, f"core5G_{type}5G_AGF_ip")
 
-                    server_core5G_ip = data[f"server_{type}5G_core5G_ip"]["value"][0]
-                    asignar_direccion_ip(usuario, server_core5G_ip, f"server_{type}5G_core5G_ip")
+                        core5G_server_ip = data[f"core5G_{type}5G_server_ip"]["value"][0]
+                        asignar_direccion_ip(usuario, core5G_server_ip, f"core5G_{type}5G_server_ip")
 
+                        server_core5G_ip = data[f"server_{type}5G_core5G_ip"]["value"][0]
+                        asignar_direccion_ip(usuario, server_core5G_ip, f"server_{type}5G_core5G_ip")
 
-                    return redirect(reverse('network_list'))
-            
+                        return redirect(reverse('network_list'))
+        
 
             elif IsGen:
-                
-                if not flag_error_gen:
-
                     asignar_contraseña_ssh(usuario, request.POST.get('ssh_password'), "gen")
 
                     assigned_nets = list(UserNetwork.objects.values_list('network_cidr', flat=True))
                     red_unica = obtener_subred_unica(BASE_CIDR, assigned_nets, NET_MASK)
-                    asignar_red_usuario(usuario, red_unica, "user_gen_network")
+                    asignar_red_usuario(usuario, red_unica, "gen_network")
 
-                    asignar_subred(usuario, "subred_gen", obtener_subred_unica(obtener_red(usuario, "user_gen_network"), obtener_subredes(usuario), SUBNET_MASK))
+                    assigned_nets = list(UserNetwork.objects.values_list('network_cidr', flat=True))
+                    red_unica = obtener_subred_unica(BASE_CIDR, assigned_nets, NET_MASK)
+                    asignar_red_usuario(usuario, red_unica, "gen_mgmt_network")
+
+                    asignar_subred(usuario, "gen_mgmt_subnetwork", obtener_subred_unica(obtener_red(usuario, "gen_mgmt_network"), obtener_subredes(usuario), SUBNET_MASK))
+                    asignar_subred(usuario, "gen_subnetwork", obtener_subred_unica(obtener_red(usuario, "gen_network"), obtener_subredes(usuario), SUBNET_MASK))
 
                     resultado = apply_terraform_gen(usuario, usuario.username) 
-                else:
-                    resultado = terraform_apply_output(usuario.username)
-
-                if resultado:
-                    mensaje = "Error al crear la red Ampliada de Pruebas"
-                    asignar_flag_red(usuario, "gen_error")
-                    messages.error(request, mensaje)
-                    return redirect(reverse('network_list'))
-                
-                else: 
                     asignar_flag_red(usuario, "gen")
-                    eliminar_flag_red(usuario, "gen_error")
-                    messages.success(request, "Red Ampliada de Pruebas creada correctamente")
 
-                    # Cargar la salida de Terraform
-                    with open(f"terraform/{usuario.username}/terraform_outputs.json") as f:
-                            data = json.load(f)
+                    if resultado:
+                        mensaje = "Error al crear la red Ampliada de Pruebas"
+                        asignar_flag_red(usuario, "gen_error")
+                        messages.error(request, mensaje)
+                        return redirect(reverse('network_list'))
+                    
+                    else: 
+                        eliminar_flag_red(usuario, "gen_error")
+                        messages.success(request, "Red Ampliada de Pruebas creada correctamente")
 
-                    instance_gen_ip = data["instance_gen_ip"]["value"][0]
-                    asignar_direccion_ip(usuario, instance_gen_ip, "instance_gen_ip")
+                        # Cargar la salida de Terraform
+                        with open(f"terraform/{usuario.username}/terraform_outputs.json") as f:
+                                data = json.load(f)
 
+                        gen_broker_ip = data["gen_broker_ip"]["value"]
+                        asignar_direccion_ip(usuario, gen_broker_ip, "gen_broker_ip")
 
-                    return redirect(reverse('network_list'))
+                        gen_controler_ip = data["gen_controller_ip"]["value"][0]
+                        asignar_direccion_ip(usuario, gen_controler_ip, "gen_controller_ip")
+
+                        gen_worker_ip = data["gen_worker_ip"]["value"][0]
+                        asignar_direccion_ip(usuario, gen_worker_ip, "gen_worker_ip")
+                        return redirect(reverse('network_list'))
 
         else:
             creada_red_5G_open = obtener_flag_red(request.user, "open")
@@ -385,25 +385,6 @@ def create_network(request):
     else:
         return redirect(reverse('network_list'))
 
-def apply_terraform_gen(usuario, username):
-
-    user_dir = os.path.join("terraform", username)
-    os.makedirs(user_dir, exist_ok=True)
-
-    main_tf_path = os.path.join(user_dir, "main.tf")
-
-    append_section = append_section_gen(username, 
-                                       obtener_subred_por_nombre(usuario, f"subred_gen"), 
-                                       get_gateway(obtener_subred_por_nombre(usuario, f"subred_gen")),
-                                       desencriptar_contraseña(SSH_password.objects.get(user=usuario, type="gen").ssh_password)
-                                       )
-    with open(main_tf_path, "a") as f:
-        f.write(append_section)
-    
-    return terraform_apply_output(username)
-
-
-
 
 def apply_terraform_5G(usuario, username, core_image, type):
     user_dir = os.path.join("terraform", username)
@@ -412,11 +393,11 @@ def apply_terraform_5G(usuario, username, core_image, type):
     main_tf_path = os.path.join(user_dir, "main.tf")
 
     append_section = append_section_5G(username, 
-                                       obtener_subred_por_nombre(usuario, f"subred_{type}5G_UE_AGF"), 
-                                       obtener_subred_por_nombre(usuario, f"subred_{type}5G_AGF_core5G"), 
-                                       obtener_subred_por_nombre(usuario, f"subred_{type}5G_core5G_server"),
-                                       obtener_subred_por_nombre(usuario, f"subred_{type}5G_mgmt"),
-                                       get_gateway(obtener_subred_por_nombre(usuario, f"subred_{type}5G_mgmt")),
+                                       obtener_subred_por_nombre(usuario, f"{type}5G_UE_AGF_subnetwork"), 
+                                       obtener_subred_por_nombre(usuario, f"{type}5G_AGF_core5G_subnetwork"), 
+                                       obtener_subred_por_nombre(usuario, f"{type}5G_core5G_server_subnetwork"),
+                                       obtener_subred_por_nombre(usuario, f"{type}5G_mgmt_subnetwork"),
+                                       get_gateway(obtener_subred_por_nombre(usuario, f"{type}5G_mgmt_subnetwork")),
                                        core_image,
                                        type,
                                        desencriptar_contraseña(SSH_password.objects.get(user=usuario, type=type).ssh_password)
@@ -427,7 +408,28 @@ def apply_terraform_5G(usuario, username, core_image, type):
     return terraform_apply_output(username)
     
 
+
+def apply_terraform_gen(usuario, username):
+
+    user_dir = os.path.join("terraform", username)
+    os.makedirs(user_dir, exist_ok=True)
+
+    main_tf_path = os.path.join(user_dir, "main.tf")
+
+    append_section = append_section_gen(username, 
+                                       obtener_subred_por_nombre(usuario, f"gen_mgmt_subnetwork"), 
+                                       obtener_subred_por_nombre(usuario, f"gen_subnetwork"),
+                                       get_gateway(obtener_subred_por_nombre(usuario, f"gen_mgmt_subnetwork")),
+                                       desencriptar_contraseña(SSH_password.objects.get(user=usuario, type="gen").ssh_password)
+                                       )
+    with open(main_tf_path, "a") as f:
+        f.write(append_section)
+    
+    return terraform_apply_output(username)
+
+
 @login_required
+@require_http_methods(["POST", "PUT"])
 def delete_net_5G(request, type, flag):
 
     usuario = get_user(request)
@@ -447,11 +449,11 @@ def delete_net_5G(request, type, flag):
         content = f.read()
 
     append_section = append_section_5G(username, 
-                                       obtener_subred_por_nombre(usuario, f"subred_{type}5G_UE_AGF"), 
-                                       obtener_subred_por_nombre(usuario, f"subred_{type}5G_AGF_core5G"), 
-                                       obtener_subred_por_nombre(usuario, f"subred_{type}5G_core5G_server"),
-                                       obtener_subred_por_nombre(usuario, f"subred_{type}5G_mgmt"),
-                                       get_gateway(obtener_subred_por_nombre(usuario, f"subred_{type}5G_mgmt")),
+                                       obtener_subred_por_nombre(usuario, f"{type}5G_UE_AGF_subnetwork"), 
+                                       obtener_subred_por_nombre(usuario, f"{type}5G_AGF_core5G_subnetwork"), 
+                                       obtener_subred_por_nombre(usuario, f"{type}5G_core5G_server_subnetwork"),
+                                       obtener_subred_por_nombre(usuario, f"{type}5G_mgmt_subnetwork"),
+                                       get_gateway(obtener_subred_por_nombre(usuario, f"{type}5G_mgmt_subnetwork")),
                                        core_image,
                                        type,
                                        desencriptar_contraseña(SSH_password.objects.get(user=usuario, type=type).ssh_password) 
@@ -472,14 +474,14 @@ def delete_net_5G(request, type, flag):
         eliminar_contraseña_ssh(usuario, type)
 
         #Eliminar las redes
-        eliminar_red_usuario(usuario, f"user_{type}5G_mgmt_network")
-        eliminar_red_usuario(usuario, f"user_{type}5G_network")
+        eliminar_red_usuario(usuario, f"{type}5G_mgmt_network")
+        eliminar_red_usuario(usuario, f"{type}5G_network")
 
         #Eliminar las subredes
-        eliminar_subred(usuario, f"subred_{type}5G_UE_AGF")
-        eliminar_subred(usuario, f"subred_{type}5G_AGF_core5G")
-        eliminar_subred(usuario, f"subred_{type}5G_core5G_server")
-        eliminar_subred(usuario, f"subred_{type}5G_mgmt")
+        eliminar_subred(usuario, f"{type}5G_UE_AGF_subnetwork")
+        eliminar_subred(usuario, f"{type}5G_AGF_core5G_subnetwork")
+        eliminar_subred(usuario, f"{type}5G_core5G_server_subnetwork")
+        eliminar_subred(usuario, f"{type}5G_mgmt_subnetwork")
 
         # Eliminar las IPs
         eliminar_direccion_ip(usuario, f"UE_{type}5G_mgmt_ip")
@@ -508,6 +510,7 @@ def delete_net_5G(request, type, flag):
 
 
 @login_required
+@require_http_methods(["POST", "PUT"])
 def delete_net_gen(request, flag):
 
     usuario = get_user(request)
@@ -522,10 +525,10 @@ def delete_net_gen(request, flag):
         content = f.read()
 
     append_section = append_section_gen(username, 
-                                       obtener_subred_por_nombre(usuario, f"subred_gen"), 
-                                       obtener_subred_por_nombre(usuario, f"subred_gen_mgmt"), 
-                                       get_gateway(obtener_subred_por_nombre(usuario, f"subred_gen_mgmt")),
-                                       desencriptar_contraseña(SSH_password.objects.get(user=usuario, type="gen").ssh_password) 
+                                       obtener_subred_por_nombre(usuario, f"gen_mgmt_subnetwork"), 
+                                       obtener_subred_por_nombre(usuario, f"gen_subnetwork"),
+                                       get_gateway(obtener_subred_por_nombre(usuario, f"gen_mgmt_subnetwork")),
+                                       desencriptar_contraseña(SSH_password.objects.get(user=usuario, type="gen").ssh_password)
                                        )
     
     old_content = re.sub(re.escape(append_section), "", content)
@@ -542,11 +545,17 @@ def delete_net_gen(request, flag):
        eliminar_contraseña_ssh(usuario, "gen")
 
        #Eliminar las redes
-       eliminar_red_usuario(usuario, "user_gen_network")
-       eliminar_subred(usuario, "subred_gen")
+       eliminar_red_usuario(usuario, "gen_network")
+       eliminar_red_usuario(usuario, "gen_mgmt_network")
 
-       # Eliminar la IPs
-       eliminar_direccion_ip(usuario, "instance_gen_ip")
+       #Eliminar las subredes
+       eliminar_subred(usuario, "gen_mgmt_subnetwork")
+       eliminar_subred(usuario, "gen_subnetwork")
+
+       # Eliminar las IPs
+       eliminar_direccion_ip(usuario, "gen_broker_ip")
+       eliminar_direccion_ip(usuario, "gen_controller_ip")
+       eliminar_direccion_ip(usuario, "gen_worker_ip")
     
        mensaje = "Red Ampliada de Pruebas eliminada correctamente"
        messages.success(request, mensaje)
@@ -598,9 +607,12 @@ def view_net_5G(request, type):
 @login_required
 def view_net_gen(request):
 
-    instance_gen_ip = obtener_direccion_ip(request.user, "instance_gen_ip")
+    gen_broker_ip = obtener_direccion_ip(request.user, "gen_broker_ip")
+    print("gen_broker_ip", gen_broker_ip)
     context = {
-        'instance_gen_ip': instance_gen_ip,
+        'gen_broker_ip': gen_broker_ip,
+        'gen_controller_ip': obtener_direccion_ip(request.user, "gen_controller_ip"),
+        'gen_worker_ip': obtener_direccion_ip(request.user, "gen_worker_ip"),
     }
     return render(request, 'network_gen.html', context)
 

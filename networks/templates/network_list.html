@@ -15,15 +15,25 @@
 </div>
 
 <div class="d-grid gap-2 mb-4">
-    <form action="{% url 'import_networks' %}" method="post">
+    <form action="{% url 'check_networks' %}" method="post">
         {% csrf_token %}
-        <button type="submit" class="btn btn-success">Importar redes</button>
+        <button type="submit" class="btn btn-success">Recursos desplegados</button>
     </form>
-    <span>Importa las redes de OpenStack al estado de Terraform. </span>
-    <p>Haz esto cuando haya un error al crear tu red. Este proceso puede tardar unos minutos...</p>
+    <span>Estos son los recursos actualmente desplegados en OpenStack para tu usuario.</span>
+    <p>Este proceso puede tardar unos minutos...</p>
 </div>
 
-{% if creada_red_5G_open %}
+{% if error_red_5G_open %}
+<div class="alert alert-warning">
+    ⚠️ Hubo un problema con tu red Open5GCore. Elimínela para solucionarlo.
+</div>
+<div class="d-grid gap-2 mb-3">
+    <form action="{% url 'delete_net_5G' 'open' 'False' %}" method="post">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Eliminar red Open5GCore</button>
+    </form>
+</div>
+{% elif creada_red_5G_open %}
 <div class="alert alert-success">
     ✅ Red 5G Open desplegada
 </div>
@@ -37,23 +47,23 @@
         <button type="submit" class="btn btn-primary">Ver red Open5GCore</button>
     </form>
 </div>
-{% elif error_red_5G_open %}
-<div class="alert alert-warning">
-    ⚠️ Hubo un problema con tu red Open5GCore. Importe la red y créela o elimínela para solucionarlo.
-</div>
-<div class="d-grid gap-2 mb-3">
-    <form action="{% url 'delete_net_5G' 'open' 'False' %}" method="post">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-danger">Eliminar red Open5GCore</button>
-    </form>
-</div>
 {% else %}
 <div class="alert alert-danger">
     ❌ No se ha creado tu red Open5GCore
 </div>
 {% endif %}
 
-{% if creada_red_5G_free %}
+{% if error_red_5G_free %}
+<div class="alert alert-warning">
+    ⚠️ Hubo un problema con tu red Free5GC. Elimínela para solucionarlo.
+</div>
+<div class="d-grid gap-2 mb-3">
+    <form action="{% url 'delete_net_5G' 'free' 'False' %}" method="post">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Eliminar red Free5GC</button>
+    </form>
+</div>
+{% elif creada_red_5G_free %}
 <div class="alert alert-success">
     ✅ Red 5G Free desplegada
 </div>
@@ -67,23 +77,23 @@
         <button type="submit" class="btn btn-primary">Ver red Free5GC</button>
     </form>
 </div>
-{% elif error_red_5G_free %}
-<div class="alert alert-warning">
-    ⚠️ Hubo un problema con tu red Free5GC. Importe la red y créela o elimínela para solucionarlo.
-</div>
-<div class="d-grid gap-2 mb-3">
-    <form action="{% url 'delete_net_5G' 'free' 'False' %}" method="post">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-danger">Eliminar red Free5GC</button>
-    </form>
-</div>
 {% else %}
 <div class="alert alert-danger">
     ❌ No se ha creado tu red Free5GC
 </div>
 {% endif %}
 
-{% if creada_red_gen %}
+{% if error_red_gen %}
+<div class="alert alert-warning">
+    ⚠️ Hubo un problema con tu red Ampliada de Pruebas. Elimínela para solucionarlo.
+</div>
+<div class="d-grid gap-2 mb-3">
+    <form action="{% url 'delete_net_gen' 'False' %}" method="post">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-danger">Eliminar red Ampliada de Pruebas</button>
+    </form>
+</div>
+{% elif creada_red_gen %}
 <div class="alert alert-success">
     ✅ Red Ampliada de Pruebas desplegada
 </div>
@@ -95,16 +105,6 @@
     <form action="{% url 'view_net_gen' %}" method="post">
         {% csrf_token %}
         <button type="submit" class="btn btn-primary">Ver red Ampliada de Pruebas</button>
-    </form>
-</div>
-{% elif error_red_gen %}
-<div class="alert alert-warning">
-    ⚠️ Hubo un problema con tu red Ampliada de Pruebas. Importe la red y créela o elimínela para solucionarlo.
-</div>
-<div class="d-grid gap-2 mb-3">
-    <form action="{% url 'delete_net_gen' 'False' %}" method="post">
-        {% csrf_token %}
-        <button type="submit" class="btn btn-danger">Eliminar red Ampliada de Pruebas</button>
     </form>
 </div>
 {% else %}

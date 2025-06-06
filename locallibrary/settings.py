@@ -23,7 +23,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-&0de(o)xblo#lzpi4n2zxzi%n(xrvlqhvi=a1^w)7s@4a_dj@='
 
-DEBUG = True
+DEBUG = False
 ALLOWED_HOSTS = ['localhost', '127.0.0.1'] 
 
 STATIC_URL = '/static/'
@@ -58,6 +58,13 @@ MIDDLEWARE = [
 ROOT_URLCONF = 'locallibrary.urls'
 
 ENCRYPTION_KEY = os.environ.get('ENCRYPTION_KEY')
+OS_AUTH_URL = os.environ.get('OS_AUTH_URL')
+OS_USERNAME = os.environ.get('OS_USERNAME')
+OS_PASSWORD = os.environ.get('OS_PASSWORD')
+OS_PROJECT_NAME = os.environ.get('OS_PROJECT_NAME')
+OS_REGION_NAME = os.environ.get('OS_REGION_NAME')
+
+
 
 TEMPLATES = [
     {
