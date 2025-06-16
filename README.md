@@ -5,13 +5,14 @@ Desarrollada con **Python/Django**, esta aplicación permite interactuar de form
 
 ---
 
-## 🛠 Requisitos previos
+## Requisitos previos
 
 Antes de ejecutar la aplicación, asegúrate de tener configurado correctamente el entorno.
 
-### 🔐 Configuración del entorno OpenStack
+### Configuración del entorno OpenStack
 
-Es necesario crear un archivo `.env` con las credenciales y parámetros de acceso a la API de OpenStack. Para facilitar esto, se incluyen los scripts:
+Es necesario añadir las variables de entorno con las credenciales y parámetros de acceso a la API de OpenStack.
+Se pueden añadir directamente a las variables del sistema (optimo por razones de seguridad), o se pueden mantener para pruebas en un archivo `.env`. Para facilitar esto, se incluyen los scripts:
 
 * `load.env.sh` (Linux)
 * `load-env.ps1` (Windows)
@@ -34,7 +35,7 @@ Estas variables permiten autenticarte frente a la nube OpenStack y asegurar las 
 
 ---
 
-## ⚙️ Herramientas necesarias
+## Herramientas necesarias
 
 Para ejecutar correctamente la aplicación, necesitas tener instaladas las siguientes herramientas en tu sistema:
 
