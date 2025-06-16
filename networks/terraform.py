@@ -3,34 +3,32 @@ import json
 from django.shortcuts import render
 from django.conf import settings
 
-#Ctrl K + C to comment the selected lines
-#Ctrl K + U to uncomment the selected lines
-
-
 # Sistema de seguridad para que en caso de error al crear una red, se pueda volver a intentarlo conservando la configuración ya creada
 
 # Sistema de seguridad para que en caso de error al eliminar una red, se active el backup para volver al estado anterior, para que el usuario pueda volver a intentarlo
 # Si no se consigue, no se elimina la red/fragmento de red de un error de creación, para poder volver a intentarlo
 
 def backup_creation_terraform(username):
+    origen = f"terraform/{username}"
     destino = f"terraform/{username}_backup"
 
     # Verificar si el directorio de destino existe y eliminarlo
     if os.path.exists(destino):
-        shutil.rmtree(destino)  # Elimina todo el directorio y su contenido
+        shutil.rmtree(destino)
 
-    # Realizar la copia del directorio completo usando xcopy
-    subprocess.run(f'xcopy "terraform\\{username}" "{destino}" /E /I /Y', shell=True, check=True) 
+    # Copiar el directorio completo
+    shutil.copytree(origen, destino)
 
 def backup_restore_terraform(username):
+    origen = f"terraform/{username}_backup"
     destino = f"terraform/{username}"
 
     # Verificar si el directorio de destino existe y eliminarlo
     if os.path.exists(destino):
         shutil.rmtree(destino)
 
-    # Realizar la copia del directorio completo usando xcopy
-    subprocess.run(f'xcopy "terraform\\{username}_backup" "{destino}" /E /I /Y', shell=True, check=True)
+    # Copiar el directorio completo
+    shutil.copytree(origen, destino)
 
 
 def terraform_apply(username):
