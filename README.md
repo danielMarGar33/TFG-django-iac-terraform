@@ -20,15 +20,20 @@ Se pueden añadir directamente a las variables del sistema (optimo por razones d
 Dentro del archivo `.env`, define las siguientes variables de entorno:
 
 ```bash
-OS_USERNAME=<tu_usuario>
-OS_PROJECT_NAME=<nombre_del_proyecto>
-OS_PASSWORD=<tu_contraseña>
-OS_AUTH_URL=<url_de_autenticación>
-OS_REGION_NAME=<región>
-OS_USER_DOMAIN_NAME=<dominio_de_usuario>
-OS_PROJECT_DOMAIN_NAME=<dominio_del_proyecto>
-OS_IDENTITY_API_VERSION=<versión_api>
-ENCRYPTION_KEY=<clave_secreta>
+# === Credenciales de OpenStack ===
+OS_USERNAME=tu_usuario
+OS_PROJECT_NAME=nombre_del_proyecto
+OS_PASSWORD=tu_contraseña
+OS_AUTH_URL=https://url.de.autenticacion
+
+# === Configuración adicional ===
+OS_REGION_NAME=region
+OS_USER_DOMAIN_NAME=default
+OS_PROJECT_DOMAIN_NAME=default
+OS_IDENTITY_API_VERSION=3
+
+# === Clave de cifrado interna ===
+ENCRYPTION_KEY=clave_super_secreta
 ```
 
 Estas variables permiten autenticarte frente a la nube OpenStack y asegurar las comunicaciones internas de la app.
