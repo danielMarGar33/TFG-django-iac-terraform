@@ -61,3 +61,8 @@ Todas las dependencias de Python necesarias se encuentran detalladas en el archi
 ```bash
 pip install -r requirements.txt
 ```
+
+Finalmente, arranca la aplicación con el siguiemte comando:
+```bash
+python manage.py runserver
+```
